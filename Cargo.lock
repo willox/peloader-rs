@@ -61,6 +61,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "com"
+version = "0.4.0"
+source = "git+https://github.com/microsoft/com-rs#0ef0f9ff39e71df87f07741ae94439ec96f449ec"
+dependencies = [
+ "com_macros",
+]
+
+[[package]]
+name = "com_macros"
+version = "0.4.0"
+source = "git+https://github.com/microsoft/com-rs#0ef0f9ff39e71df87f07741ae94439ec96f449ec"
+dependencies = [
+ "com_macros_support",
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
+name = "com_macros_support"
+version = "0.4.0"
+source = "git+https://github.com/microsoft/com-rs#0ef0f9ff39e71df87f07741ae94439ec96f449ec"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "const-random"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -312,6 +340,7 @@ name = "peloader"
 version = "0.0.1"
 dependencies = [
  "auxtools",
+ "com",
  "detour",
  "pelite",
  "region",

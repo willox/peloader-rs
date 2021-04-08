@@ -1,3 +1,6 @@
+#![windows_subsystem = "windows"]
+
+mod browser;
 mod win32;
 
 use std::{ffi::c_void, os::raw::c_char, path::Path};
@@ -12,15 +15,39 @@ use auxtools::sigscan;
 
 type InsertedFunctionTableTy = extern "fastcall" fn(image_base: *const c_char, image_size: usize);
 
+static mut HANDLE: usize = 0;
+static mut GET_ORIGINAL: Option<extern "stdcall" fn(handle: usize, buffer: *mut u8, buffer_len: usize) -> usize> = None;
+
 extern "stdcall" fn get_module_file_name_w_hook(handle: usize, buffer: *mut u8, buffer_len: usize) -> usize {
     unsafe {
-        *buffer = b'f';
-        *buffer = b'u';
-        *buffer = b'k';
-        *buffer = b'\0';
-    }
+        if handle == HANDLE {
+            if buffer_len < 16 {
+                // TODO: implement
+                return 0;
+            }
 
-    3
+            *(buffer.offset(0)) = b'd';
+            *(buffer.offset(1)) = b'r';
+            *(buffer.offset(2)) = b'e';
+            *(buffer.offset(3)) = b'a';
+            *(buffer.offset(4)) = b'm';
+            *(buffer.offset(5)) = b's';
+            *(buffer.offset(6)) = b'e';
+            *(buffer.offset(7)) = b'e';
+            *(buffer.offset(8)) = b'k';
+            *(buffer.offset(9)) = b'e';
+            *(buffer.offset(10)) = b'r';
+            *(buffer.offset(11)) = b'.';
+            *(buffer.offset(12)) = b'e';
+            *(buffer.offset(13)) = b'x';
+            *(buffer.offset(14)) = b'e';
+            *(buffer.offset(15)) = b'\0';
+
+            return 15;
+        }
+
+        (GET_ORIGINAL.unwrap())(handle, buffer, buffer_len)
+    }
 }
 
 fn main() {
@@ -34,6 +61,7 @@ fn main() {
     unsafe {
         let detour = RawDetour::new(get_module_file_name_w as _, get_module_file_name_w_hook as _).unwrap();
         detour.enable().unwrap();
+        GET_ORIGINAL = std::mem::transmute(detour.trampoline());
         std::mem::forget(detour);
     }
 
@@ -44,13 +72,17 @@ fn main() {
         std::mem::transmute(scan)
     };
 
-    let path = Path::new(r"E:\byond_builds\514.1552_byond\byond\bin\dreamdaemon.exe");
+    let path = Path::new(r"E:\byond_builds\514.1552_byond\byond\bin\dreamseeker.exe");
 
     let map = ImageMap::open(path).unwrap();
     let view = PeView::from_bytes(&map).unwrap();
 
     let base: &[u8] = map.as_ref();
     let base = base.as_ptr();
+
+    unsafe {
+        HANDLE = std::mem::transmute(base);
+    }
 
     let entry_point = base.wrapping_offset(view.optional_header().AddressOfEntryPoint as isize);
 
@@ -124,5 +156,6 @@ fn main() {
 
     insert_func_table(base as *const _, view.optional_header().SizeOfImage as usize);
 
+    browser::init();
     entry_point();
 }

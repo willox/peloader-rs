@@ -8,6 +8,7 @@ edition = "2018"
 pelite = "0.9"
 windows = "0.7.0"
 region = "2.2.0"
+com = { git = "https://github.com/microsoft/com-rs", features = ["production"] }
 
 # omfg
 auxtools = { git = "https://github.com/willox/auxtools" }
@@ -18,3 +19,9 @@ default-features = false
 
 [build-dependencies]
 windows = "0.7.0"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
