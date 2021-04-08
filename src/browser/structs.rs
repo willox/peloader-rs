@@ -1,4 +1,6 @@
 
+pub type VerbId = i32;
+
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Size {

@@ -68,17 +68,27 @@ com::interfaces! {
         fn Invoke(&self, dispIdMember: u32, riid: u32, lcid: u32, wFlags: u16, pDispParams: u32, pVarResult: u32, pExcepInfo: u32, puArgErr: u32) -> com::sys::HRESULT;
     }
 
+    #[uuid("00000118-0000-0000-C000-000000000046")]
+    pub unsafe interface IOleClientSite : com::interfaces::IUnknown {
+        fn SaveObject(&self) -> com::sys::HRESULT;
+        fn GetMoniker(&self, dwAssign: u32, dwWhichMoniker: u32, ppmk: u32) -> com::sys::HRESULT;
+        fn GetContainer(&self, ppContainer: u32) -> com::sys::HRESULT;
+        fn ShowObject(&self) -> com::sys::HRESULT;
+        fn OnShowWindow(&self, fShow: bool) -> com::sys::HRESULT;
+        fn RequestNewObjectLayout(&self) -> com::sys::HRESULT;
+    }
+
     #[uuid("00000112-0000-0000-C000-000000000046")]
     pub unsafe interface IOleObject : com::interfaces::IUnknown {
-        fn SetClientSite(&self, pClientSite: u32) -> com::sys::HRESULT;
-        fn GetClientSite(&self, ppClientSite: u32) -> com::sys::HRESULT;
+        fn SetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT;
+        fn GetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT;
         fn SetHostNames(&self, szContainerApp: u32, szContainerObj: u32) -> com::sys::HRESULT;
         fn Close(&self, dwSaveOption: u32) -> com::sys::HRESULT;
         fn SetMoniker(&self, dwWhichMoniker: u32, pmk: u32) -> com::sys::HRESULT;
         fn GetMoniker(&self, dwAssign: u32, dwWhichMoniker: u32, ppmk: u32) -> com::sys::HRESULT;
         fn InitFromData(&self, pDataObject: u32, fCreation: u32, dwReserved: u32) -> com::sys::HRESULT;
         fn GetClipboardData(&self, dwReserved: u32, ppDataObject: u32) -> com::sys::HRESULT;
-        fn DoVerb(&self, iVerb: u32, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT;
+        fn DoVerb(&self, iVerb: structs::VerbId, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT;
         fn EnumVerbs(&self, ppEnumOleVerb: u32) -> com::sys::HRESULT;
         fn Update(&self) -> com::sys::HRESULT;
         fn IsUpToDate(&self) -> com::sys::HRESULT;
@@ -202,10 +212,10 @@ com::class! {
     }
 
     impl IOleObject for WebBrowser {
-        fn SetClientSite(&self, pClientSite: u32) -> com::sys::HRESULT {
+        fn SetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn GetClientSite(&self, ppClientSite: u32) -> com::sys::HRESULT {
+        fn GetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT {
             unimplemented!()
         }
         fn SetHostNames(&self, szContainerApp: u32, szContainerObj: u32) -> com::sys::HRESULT {
@@ -226,7 +236,7 @@ com::class! {
         fn GetClipboardData(&self, dwReserved: u32, ppDataObject: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn DoVerb(&self, iVerb: u32, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT {
+        fn DoVerb(&self, iVerb: structs::VerbId, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
         fn EnumVerbs(&self, ppEnumOleVerb: u32) -> com::sys::HRESULT {
