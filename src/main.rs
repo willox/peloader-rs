@@ -91,7 +91,7 @@ fn main() {
     //
     for x in view.base_relocs().unwrap().iter_blocks() {
         for word in x.words() {
-            let ptr = base.wrapping_offset(x.rva_of(word) as isize) as *mut u32;
+            let ptr = base.wrapping_offset(x.rva_of(word) as isize) as *mut i32;
             let type_of = x.type_of(word);
 
             match type_of {
@@ -99,7 +99,7 @@ fn main() {
                 0x03 => {
                     unsafe {
                         region::protect(ptr as *const u8, 4, Protection::READ_WRITE_EXECUTE).unwrap();
-                        *ptr += (base as u32) - view.optional_header().ImageBase;
+                        *ptr += (base as i32) - (view.optional_header().ImageBase as i32);
                     }
                 }
 

@@ -1,4 +1,6 @@
-use std::ffi::c_void;
+mod structs;
+
+use std::{cell::{RefCell, RefMut}, ffi::c_void};
 use detour::RawDetour;
 
 use crate::win32;
@@ -82,13 +84,41 @@ com::interfaces! {
         fn IsUpToDate(&self) -> com::sys::HRESULT;
         fn GetUserClassID(&self, pClsid: u32) -> com::sys::HRESULT;
         fn GetUserType(&self, dwFormofType: u32, pszUserType: u32) -> com::sys::HRESULT;
-        fn SetExtent(&self, dwDrawAspect: u32, psizel: u32) -> com::sys::HRESULT;
-        fn GetExtent(&self, dwDrawAspect: u32, psizel: u32) -> com::sys::HRESULT;
+        fn SetExtent(&self, aspect: structs::DataViewAspect, size: *const structs::Size) -> com::sys::HRESULT;
+        fn GetExtent(&self, aspect: structs::DataViewAspect, size: *mut structs::Size) -> com::sys::HRESULT;
         fn Advise(&self, pAdvSink: u32, pdwConnection: u32) -> com::sys::HRESULT;
         fn Unadvise(&self, dwConnection: u32) -> com::sys::HRESULT;
         fn EnumAdvise(&self, ppenumAdvise: u32) -> com::sys::HRESULT;
-        fn GetMiscStatus(&self, dwAspect: u32, pdwStatus: u32) -> com::sys::HRESULT;
+        fn GetMiscStatus(&self, dwAspect: u32, pdwStatus: *mut u32) -> com::sys::HRESULT;
         fn SetcolorScheme(&self, pLogpal: u32) -> com::sys::HRESULT;
+    }
+
+    #[uuid("B196B288-BAB4-101A-B69C-00AA00341D07")]
+    pub unsafe interface IOleControl : com::interfaces::IUnknown {
+        fn GetControlInfo(&self, pCI: u32) -> com::sys::HRESULT;
+        fn OnMnemonic(&self, pMsg: u32) -> com::sys::HRESULT;
+        fn OnAmbientPropertyChange(&self, dispID: u32) -> com::sys::HRESULT;
+        fn FreezeEvents(&self, bFreeze: bool) -> com::sys::HRESULT;
+    }
+
+    #[uuid("b722bccb-4e68-101b-a2bc-00aa00404770")]
+    pub unsafe interface IOleCommandTarget : com::interfaces::IUnknown {
+        fn QueryStatus(&self, pguidCmdGroup: u32, cCmds: u32, prgCmds: u32, pCmdText: u32) -> com::sys::HRESULT;
+        fn Exec(&self, pguidCmdGroup: u32, nCmdID: u32, nCmdexecopt: u32, pvaIn: u32, pvaOut: u32) -> com::sys::HRESULT;
+    }
+
+    #[uuid("00000114-0000-0000-C000-000000000046")]
+    pub unsafe interface IOleWindow : com::interfaces::IUnknown {
+        fn GetWindow(&self, phwnd: u32) -> com::sys::HRESULT;
+        fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT;
+    }
+
+    #[uuid("00000113-0000-0000-C000-000000000046")]
+    pub unsafe interface IOleInPlaceObject : IOleWindow {
+        fn InPlaceDeactivate(&self) -> com::sys::HRESULT;
+        fn UIDeactive(&self) -> com::sys::HRESULT;
+        fn SetObjectRects(&self, lprcPosRect: u32, lprcClipRect: u32) -> com::sys::HRESULT;
+        fn ReactiveAndUndo(&self) -> com::sys::HRESULT;
     }
 
     #[uuid("EAB22AC1-30C1-11CF-A7EB-0000C05BAE0B")]
@@ -126,9 +156,34 @@ com::interfaces! {
     }
 }
 
+struct WebBrowserState {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for WebBrowserState {
+    fn default() -> Self {
+        WebBrowserState {
+            width: 0,
+            height: 0,
+        }
+    }
+}
+
+impl WebBrowser {
+    fn state(&self) -> RefMut<WebBrowserState> {
+        self.state.borrow_mut()
+    }
+}
+
 com::class! {
-    pub class WebBrowser: IOleObject, IWebBrowser2(IWebBrowser(IDispatch)) {
-        wat: u32,
+    class WebBrowser
+        : IOleObject
+        , IOleControl
+        , IOleCommandTarget
+        , IOleInPlaceObject(IOleWindow)
+        , IWebBrowser2(IWebBrowser(IDispatch)) {
+        state: RefCell<WebBrowserState>,
     }
 
     impl IDispatch for WebBrowser {
@@ -189,11 +244,29 @@ com::class! {
         fn GetUserType(&self, dwFormofType: u32, pszUserType: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn SetExtent(&self, dwDrawAspect: u32, psizel: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn SetExtent(&self, aspect: structs::DataViewAspect, size: *const structs::Size) -> com::sys::HRESULT {
+            if aspect != structs::DataViewAspect::Content {
+                unimplemented!();
+            }
+
+            let mut state = self.state();
+            state.width = unsafe { (*size).width };
+            state.height = unsafe { (*size).height };
+
+            com::sys::S_OK
         }
-        fn GetExtent(&self, dwDrawAspect: u32, psizel: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn GetExtent(&self, aspect: structs::DataViewAspect, size: *mut structs::Size) -> com::sys::HRESULT {
+            if aspect != structs::DataViewAspect::Content {
+                unimplemented!();
+            }
+
+            let state = self.state();
+            unsafe {
+                (*size).width = state.width;
+                (*size).height = state.height;
+            }
+
+            com::sys::S_OK
         }
         fn Advise(&self, pAdvSink: u32, pdwConnection: u32) -> com::sys::HRESULT {
             unimplemented!()
@@ -204,10 +277,61 @@ com::class! {
         fn EnumAdvise(&self, ppenumAdvise: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn GetMiscStatus(&self, dwAspect: u32, pdwStatus: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn GetMiscStatus(&self, dwAspect: u32, pdwStatus: *mut u32) -> com::sys::HRESULT {
+            unsafe {
+                *pdwStatus = 1;
+            }
+            com::sys::S_OK
         }
         fn SetcolorScheme(&self, pLogpal: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IOleControl for WebBrowser {
+        fn GetControlInfo(&self, pCI: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn OnMnemonic(&self, pMsg: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn OnAmbientPropertyChange(&self, dispID: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn FreezeEvents(&self, bFreeze: bool) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IOleCommandTarget for WebBrowser {
+        fn QueryStatus(&self, pguidCmdGroup: u32, cCmds: u32, prgCmds: u32, pCmdText: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn Exec(&self, pguidCmdGroup: u32, nCmdID: u32, nCmdexecopt: u32, pvaIn: u32, pvaOut: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IOleWindow for WebBrowser {
+        fn GetWindow(&self, phwnd: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IOleInPlaceObject for WebBrowser {
+        fn InPlaceDeactivate(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn UIDeactive(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn SetObjectRects(&self, lprcPosRect: u32, lprcClipRect: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn ReactiveAndUndo(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
     }
