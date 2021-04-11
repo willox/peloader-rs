@@ -1,3 +1,4 @@
+mod constants;
 mod structs;
 
 use std::{cell::{RefCell, RefMut}, ffi::c_void};
@@ -60,14 +61,6 @@ unsafe extern "stdcall" fn get_type_info_count(browser: *mut WebBrowser_Old, cou
 }
 
 com::interfaces! {
-    #[uuid("00020400-0000-0000-C000-000000000046")]
-    pub unsafe interface IDispatch : com::interfaces::IUnknown {
-        fn GetTypeInfoCount(&self, pctinfo: *mut u32) -> com::sys::HRESULT;
-        fn GetTypeInfo(&self, iTInfo: u32, lcid: u32, out: *const *const c_void) -> com::sys::HRESULT;
-        fn GetIDsOfNames(&self, riid: u32, rgszNames: u32, cNames: u32, lcid: u32, rgDisPId: u32) -> com::sys::HRESULT;
-        fn Invoke(&self, dispIdMember: u32, riid: u32, lcid: u32, wFlags: u16, pDispParams: u32, pVarResult: u32, pExcepInfo: u32, puArgErr: u32) -> com::sys::HRESULT;
-    }
-
     #[uuid("00000118-0000-0000-C000-000000000046")]
     pub unsafe interface IOleClientSite : com::interfaces::IUnknown {
         fn SaveObject(&self) -> com::sys::HRESULT;
@@ -119,7 +112,7 @@ com::interfaces! {
 
     #[uuid("00000114-0000-0000-C000-000000000046")]
     pub unsafe interface IOleWindow : com::interfaces::IUnknown {
-        fn GetWindow(&self, phwnd: u32) -> com::sys::HRESULT;
+        fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT;
         fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT;
     }
 
@@ -132,7 +125,7 @@ com::interfaces! {
     }
 
     #[uuid("EAB22AC1-30C1-11CF-A7EB-0000C05BAE0B")]
-    pub unsafe interface IWebBrowser : IDispatch {
+    pub unsafe interface IWebBrowser : $IDispatch {
         fn GoBack(&self) -> com::sys::HRESULT;
         fn GoFoward(&self) -> com::sys::HRESULT;
         fn GoHome(&self) -> com::sys::HRESULT;
@@ -192,23 +185,8 @@ com::class! {
         , IOleControl
         , IOleCommandTarget
         , IOleInPlaceObject(IOleWindow)
-        , IWebBrowser2(IWebBrowser(IDispatch)) {
+        , IWebBrowser2(IWebBrowser($IDispatch)) {
         state: RefCell<WebBrowserState>,
-    }
-
-    impl IDispatch for WebBrowser {
-        fn GetTypeInfoCount(&self, pctinfo: *mut u32) -> com::sys::HRESULT {
-            unimplemented!()
-        }
-        fn GetTypeInfo(&self, iTInfo: u32, lcid: u32, out: *const *const c_void) -> com::sys::HRESULT {
-            unimplemented!()
-        }
-        fn GetIDsOfNames(&self, riid: u32, rgszNames: u32, cNames: u32, lcid: u32, rgDisPId: u32) -> com::sys::HRESULT {
-            unimplemented!()
-        }
-        fn Invoke(&self, dispIdMember: u32, riid: u32, lcid: u32, wFlags: u16, pDispParams: u32, pVarResult: u32, pExcepInfo: u32, puArgErr: u32) -> com::sys::HRESULT {
-            unimplemented!()
-        }
     }
 
     impl IOleObject for WebBrowser {
@@ -237,7 +215,17 @@ com::class! {
             unimplemented!()
         }
         fn DoVerb(&self, iVerb: structs::VerbId, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT {
-            unimplemented!()
+            match iVerb {
+                constants::OLEIVERB_SHOW |
+                constants::OLEIVERB_OPEN |
+                constants::OLEIVERB_HIDE |
+                constants::OLEIVERB_INPLACEACTIVATE => {
+                    com::sys::S_OK
+                }
+
+                _ if iVerb > 0 => constants::OLEOBJ_S_INVALIDVERB,
+                _  => constants::E_NOTIMPL,
+            }
         }
         fn EnumVerbs(&self, ppEnumOleVerb: u32) -> com::sys::HRESULT {
             unimplemented!()
@@ -300,7 +288,7 @@ com::class! {
 
     impl IOleControl for WebBrowser {
         fn GetControlInfo(&self, pCI: u32) -> com::sys::HRESULT {
-            unimplemented!()
+            constants::E_NOTIMPL
         }
         fn OnMnemonic(&self, pMsg: u32) -> com::sys::HRESULT {
             unimplemented!()
@@ -309,7 +297,7 @@ com::class! {
             unimplemented!()
         }
         fn FreezeEvents(&self, bFreeze: bool) -> com::sys::HRESULT {
-            unimplemented!()
+            com::sys::S_OK
         }
     }
 
@@ -323,8 +311,11 @@ com::class! {
     }
 
     impl IOleWindow for WebBrowser {
-        fn GetWindow(&self, phwnd: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT {
+            unsafe {
+                *phwnd = 0;
+            }
+            com::sys::S_OK
         }
         fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT {
             unimplemented!()
