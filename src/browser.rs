@@ -153,8 +153,39 @@ com::interfaces! {
         fn get_Busy(&self, pBool: u32) -> com::sys::HRESULT;
     }
 
+    #[uuid("0002DF05-0000-0000-C000-000000000046")]
+    pub unsafe interface IWebBrowserApp : IWebBrowser {
+        fn Quit(&self) -> com::sys::HRESULT;
+        fn ClientToWindow(&self) -> com::sys::HRESULT;
+        fn PutProperty(&self) -> com::sys::HRESULT;
+        fn GetProperty(&self) -> com::sys::HRESULT;
+        fn Name(&self) -> com::sys::HRESULT;
+        fn HWND(&self) -> com::sys::HRESULT;
+        fn FullName(&self) -> com::sys::HRESULT;
+        fn Path(&self) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(402)]
+        fn set_Visible(&self, vis: u16) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(402)]
+        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT;
+
+        fn get_StatusBar(&self) -> com::sys::HRESULT;
+        fn set_StatusBar(&self) -> com::sys::HRESULT;
+        fn get_StatusText(&self) -> com::sys::HRESULT;
+        fn set_StatusText(&self) -> com::sys::HRESULT;
+        fn get_ToolBar(&self) -> com::sys::HRESULT;
+        fn set_ToolBar(&self) -> com::sys::HRESULT;
+        fn get_MenuBar(&self) -> com::sys::HRESULT;
+        fn set_MenuBar(&self) -> com::sys::HRESULT;
+        fn get_FullScreen(&self) -> com::sys::HRESULT;
+        fn set_FullScreen(&self) -> com::sys::HRESULT;
+    }
+
     #[uuid("D30C1661-CDAF-11d0-8A3E-00C04FC9E26E")]
-    pub unsafe interface IWebBrowser2 : IWebBrowser {
+    pub unsafe interface IWebBrowser2 : IWebBrowserApp {
         fn fuck(&self) -> com::sys::HRESULT;
     }
 }
@@ -185,7 +216,7 @@ com::class! {
         , IOleControl
         , IOleCommandTarget
         , IOleInPlaceObject(IOleWindow)
-        , IWebBrowser2(IWebBrowser($IDispatch)) {
+        , IWebBrowser2(IWebBrowserApp(IWebBrowser($IDispatch))) {
         state: RefCell<WebBrowserState>,
     }
 
@@ -411,6 +442,69 @@ com::class! {
             unimplemented!()
         }
         fn get_Busy(&self, pBool: u32) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IWebBrowserApp for WebBrowser {
+        fn Quit(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn ClientToWindow(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn PutProperty(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn GetProperty(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn Name(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn HWND(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn FullName(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn Path(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_Visible(&self, vis: u16) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_StatusBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_StatusBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_StatusText(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_StatusText(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_ToolBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_ToolBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_MenuBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_MenuBar(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn get_FullScreen(&self) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn set_FullScreen(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
     }

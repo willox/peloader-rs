@@ -20,6 +20,7 @@ pub enum DataViewAspect {
 
 unsafe impl com::AbiTransferable for DataViewAspect {
     type Abi = Self;
+    const VAR_TYPE: com::TypeDescVarType = com::TypeDescVarType::Ui4;
 
     fn get_abi(&self) -> Self::Abi {
         *self
