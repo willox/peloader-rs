@@ -155,32 +155,80 @@ com::interfaces! {
 
     #[uuid("0002DF05-0000-0000-C000-000000000046")]
     pub unsafe interface IWebBrowserApp : IWebBrowser {
+        #[id(300)]
         fn Quit(&self) -> com::sys::HRESULT;
+
+        #[id(301)]
         fn ClientToWindow(&self) -> com::sys::HRESULT;
+
+        #[id(302)]
         fn PutProperty(&self) -> com::sys::HRESULT;
+
+        #[id(303)]
         fn GetProperty(&self) -> com::sys::HRESULT;
-        fn Name(&self) -> com::sys::HRESULT;
-        fn HWND(&self) -> com::sys::HRESULT;
-        fn FullName(&self) -> com::sys::HRESULT;
-        fn Path(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(0)]
+        fn get_Name(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(-515)]
+        fn get_HWND(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(400)]
+        fn get_FullName(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(401)]
+        fn get_Path(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(402)]
+        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT;
 
         #[set]
         #[id(402)]
         fn set_Visible(&self, vis: u16) -> com::sys::HRESULT;
 
         #[get]
-        #[id(402)]
-        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT;
-
+        #[id(403)]
         fn get_StatusBar(&self) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(403)]
         fn set_StatusBar(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(404)]
         fn get_StatusText(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(404)]
         fn set_StatusText(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(405)]
         fn get_ToolBar(&self) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(405)]
         fn set_ToolBar(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(406)]
         fn get_MenuBar(&self) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(406)]
         fn set_MenuBar(&self) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(407)]
         fn get_FullScreen(&self) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(407)]
         fn set_FullScreen(&self) -> com::sys::HRESULT;
     }
 
@@ -459,16 +507,16 @@ com::class! {
         fn GetProperty(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn Name(&self) -> com::sys::HRESULT {
+        fn get_Name(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn HWND(&self) -> com::sys::HRESULT {
+        fn get_HWND(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn FullName(&self) -> com::sys::HRESULT {
+        fn get_FullName(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn Path(&self) -> com::sys::HRESULT {
+        fn get_Path(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
         fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT {
