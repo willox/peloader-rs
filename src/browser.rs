@@ -234,7 +234,32 @@ com::interfaces! {
 
     #[uuid("D30C1661-CDAF-11d0-8A3E-00C04FC9E26E")]
     pub unsafe interface IWebBrowser2 : IWebBrowserApp {
-        fn fuck(&self) -> com::sys::HRESULT;
+        fn Navigate2(&self);
+        fn QueryStatusWB(&self);
+        fn ExecWB(&self);
+        fn ShowBrowserBar(&self);
+        fn get_ReadyState(&self);
+        fn get_Offline(&self);
+        fn set_Offline(&self);
+
+        #[get]
+        #[id(551)]
+        fn get_Silent(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT;
+
+        #[set]
+        #[id(551)]
+        fn set_Silent(&self, vis: structs::VariantBool) -> com::sys::HRESULT;
+
+        fn get_RegisterAsBrowser(&self);
+        fn set_RegisterAsBrowser(&self);
+        fn get_RegisterAsDropTarget(&self);
+        fn set_RegisterAsDropTarget(&self);
+        fn get_TheaterMode(&self);
+        fn set_TheaterMode(&self);
+        fn get_AddressBar(&self);
+        fn set_AddressBar(&self);
+        fn get_Resizable(&self);
+        fn set_Resizable(&self);
     }
 }
 
@@ -242,6 +267,7 @@ struct WebBrowserState {
     pub width: u32,
     pub height: u32,
     pub visible: bool,
+    pub silent: bool,
 }
 
 impl Default for WebBrowserState {
@@ -250,6 +276,7 @@ impl Default for WebBrowserState {
             width: 0,
             height: 0,
             visible: false,
+            silent: false,
         }
     }
 }
@@ -570,7 +597,75 @@ com::class! {
     }
 
     impl IWebBrowser2 for WebBrowser {
-        fn fuck(&self) -> com::sys::HRESULT {
+        fn Navigate2(&self) {
+            unimplemented!()
+        }
+        fn QueryStatusWB(&self) {
+            unimplemented!()
+        }
+        fn ExecWB(&self) {
+            unimplemented!()
+        }
+        fn ShowBrowserBar(&self) {
+            unimplemented!()
+        }
+        fn get_ReadyState(&self) {
+            unimplemented!()
+        }
+        fn get_Offline(&self) {
+            unimplemented!()
+        }
+        fn set_Offline(&self) {
+            unimplemented!()
+        }
+
+        fn get_Silent(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT {
+            let state = self.state();
+            unsafe {
+                *out = if state.silent {
+                    structs::VariantBool::True
+                } else {
+                    structs::VariantBool::False
+                };
+            }
+            com::sys::S_OK
+        }
+
+        fn set_Silent(&self, silent: structs::VariantBool) -> com::sys::HRESULT {
+            let mut state = self.state();
+            state.silent = silent == structs::VariantBool::True;
+            com::sys::S_OK
+        }
+
+
+        fn get_RegisterAsBrowser(&self) {
+            unimplemented!()
+        }
+        fn set_RegisterAsBrowser(&self) {
+            unimplemented!()
+        }
+        fn get_RegisterAsDropTarget(&self) {
+            unimplemented!()
+        }
+        fn set_RegisterAsDropTarget(&self) {
+            unimplemented!()
+        }
+        fn get_TheaterMode(&self) {
+            unimplemented!()
+        }
+        fn set_TheaterMode(&self) {
+            unimplemented!()
+        }
+        fn get_AddressBar(&self) {
+            unimplemented!()
+        }
+        fn set_AddressBar(&self) {
+            unimplemented!()
+        }
+        fn get_Resizable(&self) {
+            unimplemented!()
+        }
+        fn set_Resizable(&self) {
             unimplemented!()
         }
     }
