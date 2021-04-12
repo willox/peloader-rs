@@ -551,17 +551,13 @@ com::class! {
         fn get_Visible(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT {
             let state = self.state();
             unsafe {
-                *out = if state.visible {
-                    structs::VariantBool::True
-                } else {
-                    structs::VariantBool::False
-                };
+                *out = state.visible.into();
             }
             com::sys::S_OK
         }
         fn set_Visible(&self, vis: structs::VariantBool) -> com::sys::HRESULT {
             let mut state = self.state();
-            state.visible = vis == structs::VariantBool::True;
+            state.visible = vis.into();
             com::sys::S_OK
         }
         fn get_StatusBar(&self) -> com::sys::HRESULT {
@@ -622,18 +618,14 @@ com::class! {
         fn get_Silent(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT {
             let state = self.state();
             unsafe {
-                *out = if state.silent {
-                    structs::VariantBool::True
-                } else {
-                    structs::VariantBool::False
-                };
+                *out = state.silent.into();
             }
             com::sys::S_OK
         }
 
         fn set_Silent(&self, silent: structs::VariantBool) -> com::sys::HRESULT {
             let mut state = self.state();
-            state.silent = silent == structs::VariantBool::True;
+            state.silent = silent.into();
             com::sys::S_OK
         }
 

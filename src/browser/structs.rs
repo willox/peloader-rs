@@ -39,6 +39,25 @@ pub enum VariantBool {
     False = 0x0000,
 }
 
+impl From<bool> for VariantBool {
+    fn from(var: bool) -> Self {
+        match var {
+            true => VariantBool::True,
+            false => VariantBool::False,
+        }
+    }
+}
+
+impl From<VariantBool> for bool {
+    fn from(var: VariantBool) -> Self {
+        match var as u16 {
+            0xFFFF => true,
+            0x0000 => false,
+            _ => panic!("unknown value of VariantBool encounterd")
+        }
+    }
+}
+
 unsafe impl com::AbiTransferable for VariantBool {
     type Abi = Self;
     const VAR_TYPE: com::TypeDescVarType = com::TypeDescVarType::Ui2;
