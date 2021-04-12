@@ -185,11 +185,11 @@ com::interfaces! {
 
         #[get]
         #[id(402)]
-        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT;
+        fn get_Visible(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT;
 
         #[set]
         #[id(402)]
-        fn set_Visible(&self, vis: u16) -> com::sys::HRESULT;
+        fn set_Visible(&self, vis: structs::VariantBool) -> com::sys::HRESULT;
 
         #[get]
         #[id(403)]
@@ -241,6 +241,7 @@ com::interfaces! {
 struct WebBrowserState {
     pub width: u32,
     pub height: u32,
+    pub visible: bool,
 }
 
 impl Default for WebBrowserState {
@@ -248,6 +249,7 @@ impl Default for WebBrowserState {
         WebBrowserState {
             width: 0,
             height: 0,
+            visible: false,
         }
     }
 }
@@ -519,11 +521,21 @@ com::class! {
         fn get_Path(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn get_Visible(&self, out: *mut u16) -> com::sys::HRESULT {
-            unimplemented!()
+        fn get_Visible(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT {
+            let state = self.state();
+            unsafe {
+                *out = if state.visible {
+                    structs::VariantBool::True
+                } else {
+                    structs::VariantBool::False
+                };
+            }
+            com::sys::S_OK
         }
-        fn set_Visible(&self, vis: u16) -> com::sys::HRESULT {
-            unimplemented!()
+        fn set_Visible(&self, vis: structs::VariantBool) -> com::sys::HRESULT {
+            let mut state = self.state();
+            state.visible = vis == structs::VariantBool::True;
+            com::sys::S_OK
         }
         fn get_StatusBar(&self) -> com::sys::HRESULT {
             unimplemented!()

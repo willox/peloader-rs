@@ -30,3 +30,24 @@ unsafe impl com::AbiTransferable for DataViewAspect {
         self as *mut Self::Abi
     }
 }
+
+
+#[repr(u16)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum VariantBool {
+    True = 0xFFFF,
+    False = 0x0000,
+}
+
+unsafe impl com::AbiTransferable for VariantBool {
+    type Abi = Self;
+    const VAR_TYPE: com::TypeDescVarType = com::TypeDescVarType::Ui2;
+
+    fn get_abi(&self) -> Self::Abi {
+        *self
+    }
+
+    fn set_abi(&mut self) -> *mut Self::Abi {
+        self as *mut Self::Abi
+    }
+}
