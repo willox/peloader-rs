@@ -1,7 +1,10 @@
 mod constants;
+mod document;
+mod script;
 mod structs;
 
-use std::{cell::{RefCell, RefMut}, ffi::c_void};
+use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
+use com::production::ClassAllocation;
 use detour::RawDetour;
 
 use crate::win32;
@@ -137,7 +140,13 @@ com::interfaces! {
         fn get_Application(&self, ppDisp: u32) -> com::sys::HRESULT;
         fn get_Parent(&self, ppDisp: u32) -> com::sys::HRESULT;
         fn get_Container(&self, ppDisp: u32) -> com::sys::HRESULT;
-        fn get_Document(&self, ppDisp: u32) -> com::sys::HRESULT;
+
+        #[get]
+        #[id(203)]
+        fn get_Document(
+            &self,
+        ) -> u32;
+
         fn get_TopLevelContainer(&self, ppDisp: u32) -> com::sys::HRESULT;
         fn get_Type(&self, Type: u32) -> com::sys::HRESULT;
         fn get_Left(&self, pl: u32) -> com::sys::HRESULT;
@@ -268,15 +277,19 @@ struct WebBrowserState {
     pub height: u32,
     pub visible: bool,
     pub silent: bool,
+    pub document: ClassAllocation<document::HtmlDocument>,
 }
 
 impl Default for WebBrowserState {
     fn default() -> Self {
+        let document = document::HtmlDocument::allocate();
+
         WebBrowserState {
             width: 0,
             height: 0,
             visible: false,
             silent: false,
+            document,
         }
     }
 }
@@ -479,8 +492,11 @@ com::class! {
         fn get_Container(&self, ppDisp: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn get_Document(&self, ppDisp: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn get_Document(&self) -> u32 {
+            let state = self.state();
+            unsafe {
+                std::mem::transmute(state.document.query_interface::<com::interfaces::IDispatch>())
+            }
         }
         fn get_TopLevelContainer(&self, ppDisp: u32) -> com::sys::HRESULT {
             unimplemented!()
@@ -626,7 +642,7 @@ com::class! {
         fn set_Silent(&self, silent: structs::VariantBool) -> com::sys::HRESULT {
             let mut state = self.state();
             state.silent = silent.into();
-            com::sys::S_OK
+                com::sys::S_OK
         }
 
 
