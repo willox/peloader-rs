@@ -127,7 +127,8 @@ com::class! {
     impl IHtmlDocument for HtmlDocument {
         pub fn get_Script(&self, out: *mut u32) -> com::sys::HRESULT {
             let script = script::Script::allocate();
-            let idispatch = script.query_interface::<com::interfaces::IDispatch>();
+            let idispatch = script.query_interface::<com::interfaces::IDispatch>().unwrap();
+            std::mem::forget(idispatch.clone());
             unsafe {
                 *out = std::mem::transmute(idispatch);
             }
