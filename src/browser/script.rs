@@ -28,10 +28,11 @@ com::class! {
         pub fn GetTypeInfo(&self) {
             unimplemented!()
         }
-        pub fn GetIDsOfNames(&self, id: *const com::sys::IID, names: *const *const u16, count: u32, lcid: u32, out: *mut u32) {
+        pub fn GetIDsOfNames(&self, id: *const com::sys::IID, names: *const *const u16, count: u32, lcid: u32, out: *mut u32) -> com::sys::HRESULT {
             unsafe {
                 *out = 1;
             }
+            com::sys::S_OK
         }
         pub fn Invoke(
             &self,
@@ -43,12 +44,13 @@ com::class! {
             result: *mut u32,
             excep_info: *mut u32,
             arg_err: *mut u32,
-        ) {
+        ) -> com::sys::HRESULT {
             let params = params as *const *const Variant;
             let data: String = unsafe {
                 (&(**params).string).try_into().unwrap()
             };
-            unimplemented!()
+            println!("exec({:?}", data);
+            com::sys::S_OK
         }
     }
 
