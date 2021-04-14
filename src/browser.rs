@@ -65,6 +65,21 @@ unsafe extern "stdcall" fn get_type_info_count(browser: *mut WebBrowser_Old, cou
 }
 
 com::interfaces! {
+
+
+    #[uuid("0000010c-0000-0000-C000-000000000046")]
+    pub unsafe interface IPersist : com::interfaces::IUnknown {
+        fn GetClassID(&self, clsid: *mut com::sys::GUID) -> com::sys::HRESULT;
+    }
+
+    #[uuid("BD1AE5E0-A6AE-11CE-BD37-504200C10000")]
+    pub unsafe interface IPersistMemory : IPersist {
+        fn IsDirty(&self);
+        fn Save(&self);
+        fn GetSizeMax(&self);
+        fn InitNew(&self);
+    }
+
     #[uuid("CF51ED10-62FE-11CF-BF86-00A0C9034836")]
     pub unsafe interface IQuickActivate : com::interfaces::IUnknown {
         fn QuickActivate(&self, container: *const structs::QAContainer, control: *mut structs::QAControl) -> com::sys::HRESULT;
@@ -114,7 +129,7 @@ com::interfaces! {
         fn Unadvise(&self, dwConnection: u32) -> com::sys::HRESULT;
         fn EnumAdvise(&self, ppenumAdvise: u32) -> com::sys::HRESULT;
         fn GetMiscStatus(&self, dwAspect: u32, pdwStatus: *mut u32) -> com::sys::HRESULT;
-        fn SetcolorScheme(&self, pLogpal: u32) -> com::sys::HRESULT;
+        fn SetColorScheme(&self, pLogpal: u32) -> com::sys::HRESULT;
     }
 
     #[uuid("B196B288-BAB4-101A-B69C-00AA00341D07")]
@@ -135,6 +150,20 @@ com::interfaces! {
     pub unsafe interface IOleWindow : com::interfaces::IUnknown {
         fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT;
         fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT;
+    }
+
+    #[uuid("00000119-0000-0000-C000-000000000046")]
+    pub unsafe interface IOleInPlaceSite : IOleWindow {
+        fn CanInPlaceActivate(&self);
+        fn OnInPlaceActivate(&self);
+        fn OnUIActivate(&self);
+        fn GetWindowContext(&self);
+        fn Scroll(&self);
+        fn OnUIDeactivate(&self);
+        fn OnInPlaceDeactivate(&self);
+        fn DiscardUndoState(&self);
+        fn DeactivateAndUndo(&self);
+        fn OnPosRectChange(&self);
     }
 
     #[uuid("00000113-0000-0000-C000-000000000046")]
@@ -301,10 +330,41 @@ struct WebBrowserState {
     pub silent: bool,
     pub document: ClassAllocation<document::HtmlDocument>,
     pub client_site: Option<IOleClientSite>,
+    pub in_place_site: Option<IOleInPlaceSite>,
+    pub window: win32::HWND,
+}
+
+impl WebBrowserState {
+    fn Activate(&mut self) {
+        let in_place_site: IOleInPlaceSite = self.client_site.as_ref().unwrap().query_interface().unwrap();
+
+        unsafe {
+            in_place_site.OnInPlaceActivate();
+        }
+
+        self.in_place_site = Some(in_place_site);
+    }
 }
 
 impl Default for WebBrowserState {
     fn default() -> Self {
+        let window = unsafe {
+            win32::CreateWindowExA(
+                win32::WINDOW_EX_STYLE::WS_EX_CLIENTEDGE,
+                "fuk",
+                "fuk",
+                win32::WINDOW_STYLE::WS_BORDER,
+                20,
+                40,
+                400,
+                500,
+                win32::HWND::default(),
+                win32::HMENU::default(),
+                win32::HINSTANCE::default(),
+                std::ptr::null_mut()
+            )
+        };
+
         WebBrowserState {
             width: 0,
             height: 0,
@@ -312,6 +372,8 @@ impl Default for WebBrowserState {
             silent: false,
             document: document::HtmlDocument::allocate(),
             client_site: None,
+            in_place_site: None,
+            window,
         }
     }
 }
@@ -324,7 +386,8 @@ impl WebBrowser {
 
 com::class! {
     class WebBrowser
-        : IQuickActivate
+        : IPersistMemory(IPersist)
+        , IQuickActivate
         , IProvideClassInfo2(IProvideClassInfo)
         , IOleObject
         , IOleControl
@@ -332,6 +395,27 @@ com::class! {
         , IOleInPlaceObject(IOleWindow)
         , IWebBrowser2(IWebBrowserApp(IWebBrowser($IDispatch))) {
         state: RefCell<WebBrowserState>,
+    }
+
+    impl IPersist for WebBrowser {
+        fn GetClassID(&self, clsid: *mut com::sys::GUID) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IPersistMemory for WebBrowser {
+        fn IsDirty(&self) {
+            unimplemented!()
+        }
+        fn Save(&self) {
+            unimplemented!()
+        }
+        fn GetSizeMax(&self) {
+            unimplemented!()
+        }
+        fn InitNew(&self) {
+            unimplemented!()
+        }
     }
 
     impl IQuickActivate for WebBrowser {
@@ -408,12 +492,17 @@ com::class! {
             unimplemented!()
         }
         fn DoVerb(&self, iVerb: structs::VerbId, lpmsg: u32, pActiveSite: u32, lindex: u32, hwndParent: u32, lprcPosRect: u32) -> com::sys::HRESULT {
+            println!("Verb({:?})", iVerb);
             match iVerb {
                 constants::OLEIVERB_SHOW |
                 constants::OLEIVERB_OPEN |
-                constants::OLEIVERB_HIDE |
+                constants::OLEIVERB_HIDE => {
+                    com::sys::S_OK
+                }
+
                 constants::OLEIVERB_INPLACEACTIVATE => {
-                    println!("DoVerb({:?})", iVerb);
+                    let mut state = self.state();
+                    state.Activate();
                     com::sys::S_OK
                 }
 
@@ -475,7 +564,7 @@ com::class! {
             }
             com::sys::S_OK
         }
-        fn SetcolorScheme(&self, pLogpal: u32) -> com::sys::HRESULT {
+        fn SetColorScheme(&self, pLogpal: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
     }
@@ -506,8 +595,9 @@ com::class! {
 
     impl IOleWindow for WebBrowser {
         fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT {
+            let state = self.state();
             unsafe {
-                *phwnd = 0;
+                *phwnd = std::mem::transmute(state.window);
             }
             com::sys::S_OK
         }
