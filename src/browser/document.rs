@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::script;
 
 com::interfaces! {
@@ -122,11 +124,13 @@ com::interfaces! {
 com::class! {
     pub class HtmlDocument
         : IHtmlDocument2(IHtmlDocument($IDispatch))
-    {}
+    {
+        state_ref: crate::browser::WebBrowserRef,
+    }
 
     impl IHtmlDocument for HtmlDocument {
         pub fn get_Script(&self, out: *mut u32) -> com::sys::HRESULT {
-            let script = script::Script::allocate();
+            let script = script::Script::allocate(self.state_ref.clone());
             let idispatch = script.query_interface::<com::interfaces::IDispatch>().unwrap();
             std::mem::forget(idispatch.clone());
             unsafe {

@@ -4,7 +4,7 @@ mod script;
 mod structs;
 mod window;
 
-use std::convert::TryInto;
+use std::{convert::TryInto, rc::Rc};
 use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
 use com::production::ClassAllocation;
 use detour::RawDetour;
@@ -332,20 +332,25 @@ com::interfaces! {
     }
 }
 
-struct WebBrowserState {
+pub struct WebBrowserState {
     pub width: u32,
     pub height: u32,
     pub visible: bool,
     pub silent: bool,
-    pub document: ClassAllocation<document::HtmlDocument>,
+    pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
     pub in_place_site: Option<IOleInPlaceSite>,
     pub window: Option<win32::HWND>,
+    pub url: Option<String>,
+    pub scripts: Vec<String>,
+    pub browser: Option<cef::CefBrowser>,
 }
 
-impl WebBrowserState {
-    fn activate(&mut self) {
-        let in_place_site: IOleInPlaceSite = self.client_site.as_ref().unwrap().query_interface().unwrap();
+impl WebBrowserRef {
+    fn activate(&self) {
+        let mut state = self.inner.borrow_mut();
+
+        let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
         let mut parent = win32::HWND::default();
 
         unsafe {
@@ -358,31 +363,78 @@ impl WebBrowserState {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
         }
 
-        crate::cef::create(window);
+        crate::cef::create(self.clone(), window);
 
-        self.in_place_site = Some(in_place_site);
-        self.window = Some(window);
+        state.in_place_site = Some(in_place_site);
+        state.window = Some(window);
     }
+
+    pub fn browser_created(&mut self, browser: cef::CefBrowser) {
+        let mut state = self.inner.borrow_mut();
+
+        assert!(state.browser.is_none());
+
+        let frame = browser.get_main_frame().unwrap();
+
+        if let Some(url) = &state.url {
+            println!("Cached Navigate {}", url);
+            frame.load_url(&cef::CefString::new(url));
+        }
+
+        for code in &state.scripts {
+            frame.execute_java_script(&cef::CefString::new(code), None, 0);
+        }
+
+        state.browser = Some(browser);
+    }
+}
+
+#[derive(Clone)]
+pub struct WebBrowserRef {
+    inner: Rc<RefCell<WebBrowserState>>,
 }
 
 impl Default for WebBrowserState {
     fn default() -> Self {
-        WebBrowserState {
+        Self {
             width: 0,
             height: 0,
             visible: false,
             silent: false,
-            document: document::HtmlDocument::allocate(),
+            document: None,
             client_site: None,
             in_place_site: None,
             window: None,
+            url: None,
+            scripts: vec![],
+            browser: None,
+        }
+    }
+}
+
+impl Default for WebBrowserRef {
+    fn default() -> Self {
+        let state = WebBrowserState {
+            ..Default::default()
+        };
+
+        let rc = Rc::new(RefCell::new(state));
+        {
+            let mut state = rc.borrow_mut();
+            state.document = Some(document::HtmlDocument::allocate(Self {
+                inner: Rc::clone(&rc),
+            }));
+        }
+
+        Self {
+            inner: rc,
         }
     }
 }
 
 impl WebBrowser {
     fn state(&self) -> RefMut<WebBrowserState> {
-        self.state.borrow_mut()
+        self.state_ref.inner.borrow_mut()
     }
 }
 
@@ -396,7 +448,7 @@ com::class! {
         , IOleCommandTarget
         , IOleInPlaceObject(IOleWindow)
         , IWebBrowser2(IWebBrowserApp(IWebBrowser($IDispatch))) {
-        state: RefCell<WebBrowserState>,
+        state_ref: WebBrowserRef,
     }
 
     impl IPersist for WebBrowser {
@@ -503,8 +555,7 @@ com::class! {
                 }
 
                 constants::OLEIVERB_INPLACEACTIVATE => {
-                    let mut state = self.state();
-                    state.activate();
+                    self.state_ref.activate();
                     com::sys::S_OK
                 }
 
@@ -532,9 +583,33 @@ com::class! {
                 unimplemented!();
             }
 
+            let (w, h) = unsafe {
+                (((*size).width as f64 * 0.037795280352161) as u32,
+                ((*size).height as f64 * 0.037795280352161) as u32)
+            };
+
             let mut state = self.state();
-            state.width = unsafe { (*size).width };
-            state.height = unsafe { (*size).height };
+
+            state.width = w;
+            state.height = h;
+
+            println!("{}, {}", w, h);
+
+            if let Some(window) = state.window {
+                unsafe {
+                    assert_ne!(win32::SetWindowPos(window, win32::HWND::default(), 0, 0, w as i32, h as i32, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
+                }
+            }
+
+            if let Some(browser) = &state.browser {
+                let task = ::cef::CefTask::new(crate::cef::Resizer {
+                    browser: browser.to_owned(),
+                    w: w as i32,
+                    h: h as i32,
+                });
+
+                ::cef::cef_post_task(::cef::CefThreadId::UI, task);
+            }
 
             com::sys::S_OK
         }
@@ -639,7 +714,16 @@ com::class! {
         }
         fn Navigate(&self, URL: com::BString, Flags: u32, TargetFrameName: u32, PostData: u32, Headers: u32) -> com::sys::HRESULT {
             let url: String = (&URL).try_into().unwrap();
-            println!("Navigate({:?})", url);
+
+            let mut state = self.state();
+
+            if let Some(browser) = &state.browser {
+                println!("Navigate {}", url);
+                browser.get_main_frame().unwrap().load_url(&cef::CefString::new(&url));
+                return com::sys::S_OK;
+            }
+
+            state.url = Some(url);
             com::sys::S_OK
         }
         fn Refresh(&self) -> com::sys::HRESULT {
@@ -663,7 +747,7 @@ com::class! {
         fn get_Document(&self) -> u32 {
             let state = self.state();
             unsafe {
-                std::mem::transmute(state.document.query_interface::<com::interfaces::IDispatch>())
+                std::mem::transmute(state.document.as_ref().unwrap().query_interface::<com::interfaces::IDispatch>())
             }
         }
         fn get_TopLevelContainer(&self, ppDisp: u32) -> com::sys::HRESULT {

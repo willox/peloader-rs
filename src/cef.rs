@@ -1,5 +1,23 @@
+use std::{cell::RefCell, rc::Rc};
+
 use cef::*;
 use crate::win32;
+
+pub struct Resizer {
+    pub browser: CefBrowser,
+    pub w: i32,
+    pub h: i32,
+}
+
+impl Task for Resizer {
+    fn execute(&mut self) {
+        let window = self.browser.get_host().unwrap().get_window_handle();
+
+        unsafe {
+            assert_ne!(win32::SetWindowPos(std::mem::transmute::<_, win32::HWND>(window), win32::HWND::default(), 0, 0, self.w, self.h, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
+        }
+    }
+}
 
 pub struct MyApp;
 impl App for MyApp {
@@ -18,6 +36,12 @@ impl App for MyApp {
     }
 }
 
+struct DevClient;
+
+impl Client for DevClient {
+
+}
+
 struct MyClient {
     life_span_handler: CefLifeSpanHandler,
 }
@@ -28,10 +52,30 @@ impl Client for MyClient {
     }
 }
 
-struct MyLifeSpanHandler;
+struct MyLifeSpanHandler {
+    parent: win32::HWND,
+    state_ref: crate::browser::WebBrowserRef,
+}
 impl LifeSpanHandler for MyLifeSpanHandler {
-    fn on_before_close(&mut self, _browser: CefBrowser) {
-        cef_quit_message_loop();
+    fn on_after_created(&mut self, browser: CefBrowser) {
+
+        /*
+        let window_info = unsafe {
+            CefWindowInfo::default()
+                .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0)
+                .set_x(-1)
+                .set_y(-1)
+                .set_width(1024)
+                .set_height(512)
+                .set_window_name("Dev Tools")
+                .set_parent_window(std::mem::transmute(self.parent))
+                .build()
+        };
+
+        browser.get_host().unwrap().show_dev_tools(Some(&window_info), None, None, None);
+        */
+
+        self.state_ref.browser_created(browser);
     }
 }
 
@@ -78,6 +122,7 @@ pub fn init() -> bool {
         .set_log_severity(CefLogSeverity::VERBOSE)
         .set_log_file("E:/log.txt")
         .set_multi_threaded_message_loop(1)
+        .set_remote_debugging_port(1339)
         .build();
     assert!(cef_initialize(&main_args, &settings, Some(app.clone()), None));
 
@@ -88,10 +133,10 @@ pub fn init() -> bool {
     false
 }
 
-pub fn create(mut window: win32::HWND) {
+pub fn create(state_ref: crate::browser::WebBrowserRef, mut window: win32::HWND) {
     let window_info = unsafe {
         CefWindowInfo::default()
-            .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0 | win32::WINDOW_STYLE::WS_DLGFRAME.0)
+            .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0)// | win32::WINDOW_STYLE::WS_DLGFRAME.0)
             .set_x(-1)
             .set_y(-1)
             .set_width(512)
@@ -102,7 +147,10 @@ pub fn create(mut window: win32::HWND) {
     };
 
     let client = CefClient::new(MyClient {
-        life_span_handler: MyLifeSpanHandler.into(),
+        life_span_handler: MyLifeSpanHandler {
+            parent: window,
+            state_ref
+        }.into(),
     });
 
     let browser_settings = CefBrowserSettings::default();

@@ -8,6 +8,13 @@ extern "system" fn window_proc(
 ) -> win32::LRESULT {
     let mut ps = win32::PAINTSTRUCT::default();
 
+    println!("{}", message);
+
+    if message == win32::WM_SIZE {
+        let l_param = l_param.0 as u64;
+        println!("WM_SIZE {} {}", (l_param & 0xFFFFFFFF00000000) << 32, (l_param & 0xFFFFFFFF));
+    }
+
     if message == win32::WM_PAINT {
         unsafe {
             let hdc = win32::BeginPaint(hwnd, &mut ps);
@@ -32,8 +39,8 @@ pub fn create(parent: win32::HWND) -> win32::HWND {
             win32::WINDOW_STYLE::WS_CHILD,
             0,
             0,
-            400,
-            500,
+            512,
+            512,
             parent,
             win32::HMENU::default(),
             win32::HINSTANCE::default(),

@@ -11,10 +11,13 @@ fn main() {
         Windows::Win32::SystemServices::GetModuleHandleA,
         Windows::Win32::WindowsAndMessaging::{
             CreateWindowExA,
+            SetWindowPos,
             ShowWindow,
             RegisterClassA,
             DefWindowProcA,
-            WM_PAINT
+            WM_PAINT,
+            WM_SIZE,
+            WM_NCCALCSIZE,
         },
         Windows::Win32::Gdi::{
             BeginPaint,

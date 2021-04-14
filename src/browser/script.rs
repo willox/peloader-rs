@@ -1,5 +1,5 @@
 use com::interfaces::IDispatch;
-use std::convert::TryInto;
+use std::{cell::RefCell, convert::TryInto, rc::Rc};
 
 com::interfaces! {
     #[uuid("00000000-0000-0000-A731-00A0C9082637")]
@@ -18,8 +18,9 @@ pub struct Variant {
 }
 
 com::class! {
-    pub class Script : IScript(IDispatch)
-    {}
+    pub class Script : IScript(IDispatch) {
+        state_ref: crate::browser::WebBrowserRef,
+    }
 
     impl IDispatch for Script {
         pub fn GetTypeInfoCount(&self) {
