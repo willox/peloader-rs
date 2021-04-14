@@ -2,6 +2,7 @@ mod constants;
 mod document;
 mod script;
 mod structs;
+mod window;
 
 use std::convert::TryInto;
 use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
@@ -18,6 +19,7 @@ static CLSID_WEB_BROWSER: CLSID = CLSID(0x8856F961, 0x340A, 0x11D0, 0x6BA9, [0x0
 
 pub fn init() {
     com::runtime::init_runtime().unwrap();
+    window::init();
 
     let co_get_class_object = unsafe {
         let module = win32::LoadLibraryA("ole32.dll");
@@ -148,7 +150,7 @@ com::interfaces! {
 
     #[uuid("00000114-0000-0000-C000-000000000046")]
     pub unsafe interface IOleWindow : com::interfaces::IUnknown {
-        fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT;
+        fn GetWindow(&self, phwnd: *mut win32::HWND) -> com::sys::HRESULT;
         fn ContextSensitiveHelp(&self, fEnterMode: bool) -> com::sys::HRESULT;
     }
 
@@ -170,7 +172,7 @@ com::interfaces! {
     pub unsafe interface IOleInPlaceObject : IOleWindow {
         fn InPlaceDeactivate(&self) -> com::sys::HRESULT;
         fn UIDeactive(&self) -> com::sys::HRESULT;
-        fn SetObjectRects(&self, lprcPosRect: u32, lprcClipRect: u32) -> com::sys::HRESULT;
+        fn SetObjectRects(&self, pos: *const structs::Size, rect: *const structs::Size) -> com::sys::HRESULT;
         fn ReactiveAndUndo(&self) -> com::sys::HRESULT;
     }
 
@@ -331,40 +333,31 @@ struct WebBrowserState {
     pub document: ClassAllocation<document::HtmlDocument>,
     pub client_site: Option<IOleClientSite>,
     pub in_place_site: Option<IOleInPlaceSite>,
-    pub window: win32::HWND,
+    pub window: Option<win32::HWND>,
 }
 
 impl WebBrowserState {
-    fn Activate(&mut self) {
+    fn activate(&mut self) {
         let in_place_site: IOleInPlaceSite = self.client_site.as_ref().unwrap().query_interface().unwrap();
+        let mut parent = win32::HWND::default();
 
         unsafe {
-            in_place_site.OnInPlaceActivate();
+            in_place_site.GetWindow(&mut parent);
+        }
+
+        let window = window::create(parent);
+
+        unsafe {
+            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
         }
 
         self.in_place_site = Some(in_place_site);
+        self.window = Some(window);
     }
 }
 
 impl Default for WebBrowserState {
     fn default() -> Self {
-        let window = unsafe {
-            win32::CreateWindowExA(
-                win32::WINDOW_EX_STYLE::WS_EX_CLIENTEDGE,
-                "fuk",
-                "fuk",
-                win32::WINDOW_STYLE::WS_BORDER,
-                20,
-                40,
-                400,
-                500,
-                win32::HWND::default(),
-                win32::HMENU::default(),
-                win32::HINSTANCE::default(),
-                std::ptr::null_mut()
-            )
-        };
-
         WebBrowserState {
             width: 0,
             height: 0,
@@ -373,7 +366,7 @@ impl Default for WebBrowserState {
             document: document::HtmlDocument::allocate(),
             client_site: None,
             in_place_site: None,
-            window,
+            window: None,
         }
     }
 }
@@ -502,7 +495,7 @@ com::class! {
 
                 constants::OLEIVERB_INPLACEACTIVATE => {
                     let mut state = self.state();
-                    state.Activate();
+                    state.activate();
                     com::sys::S_OK
                 }
 
@@ -594,10 +587,10 @@ com::class! {
     }
 
     impl IOleWindow for WebBrowser {
-        fn GetWindow(&self, phwnd: *mut u32) -> com::sys::HRESULT {
+        fn GetWindow(&self, phwnd: *mut win32::HWND) -> com::sys::HRESULT {
             let state = self.state();
             unsafe {
-                *phwnd = std::mem::transmute(state.window);
+                *phwnd = state.window.unwrap();
             }
             com::sys::S_OK
         }
@@ -613,8 +606,9 @@ com::class! {
         fn UIDeactive(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn SetObjectRects(&self, lprcPosRect: u32, lprcClipRect: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn SetObjectRects(&self, pos: *const structs::Size, rect: *const structs::Size) -> com::sys::HRESULT {
+
+            com::sys::S_OK
         }
         fn ReactiveAndUndo(&self) -> com::sys::HRESULT {
             unimplemented!()

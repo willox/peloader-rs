@@ -2,6 +2,18 @@ fn main() {
     windows::build!(
         Windows::Win32::SystemServices::LoadLibraryA,
         Windows::Win32::SystemServices::GetProcAddress,
-        Windows::Win32::WindowsAndMessaging::CreateWindowExA,
+        Windows::Win32::WindowsAndMessaging::{
+            CreateWindowExA,
+            ShowWindow,
+            RegisterClassA,
+            DefWindowProcA,
+            WM_PAINT
+        },
+        Windows::Win32::Gdi::{
+            BeginPaint,
+            EndPaint,
+            InvalidateRect,
+            TextOutA,
+        },
     );
 }
