@@ -11,7 +11,10 @@ pub struct Resizer {
 
 impl Task for Resizer {
     fn execute(&mut self) {
-        let window = self.browser.get_host().unwrap().get_window_handle();
+        let host = self.browser.get_host().unwrap();
+        host.notify_move_or_resize_started();
+
+        let window = host.get_window_handle();
 
         unsafe {
             assert_ne!(win32::SetWindowPos(std::mem::transmute::<_, win32::HWND>(window), win32::HWND::default(), 0, 0, self.w, self.h, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
@@ -44,11 +47,42 @@ impl Client for DevClient {
 
 struct MyClient {
     life_span_handler: CefLifeSpanHandler,
+    request_handler: CefRequestHandler,
 }
 
 impl Client for MyClient {
     fn get_life_span_handler(&mut self) -> Option<CefLifeSpanHandler> {
         Some(self.life_span_handler.clone())
+    }
+
+    fn get_request_handler(&mut self) -> Option<CefRequestHandler> {
+        Some(self.request_handler.clone())
+    }
+}
+
+struct MyRequestHandler;
+impl RequestHandler for MyRequestHandler {
+    fn on_before_browse(&mut self, browser: CefBrowser, frame: CefFrame, request: CefRequest, user_gesture: bool, is_redirect: bool) -> bool {
+        let mut parts = CefURLParts::default();
+
+        let url = request.get_url().to_string();
+        let cef_url = CefString::new(&url);
+        if !cef_parse_url(&cef_url, &mut parts) {
+            return true;
+        }
+
+        let scheme = parts.scheme();
+
+        if scheme == "byond" {
+            println!("BYOND EXEC: {}", url);
+            return true;
+        }
+
+        if scheme != "http" && scheme != "https" {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -151,6 +185,7 @@ pub fn create(state_ref: crate::browser::WebBrowserRef, mut window: win32::HWND)
             parent: window,
             state_ref
         }.into(),
+        request_handler: MyRequestHandler.into(),
     });
 
     let browser_settings = CefBrowserSettings::default();

@@ -15,6 +15,8 @@ use crate::win32;
 #[derive(PartialEq)]
 struct CLSID(u32, u16, u16, u16, [u8; 6]);
 
+static CLSID_NULL: CLSID = CLSID(0, 0, 0, 0, [0;6]);
+
 static CLSID_WEB_BROWSER: CLSID = CLSID(0x8856F961, 0x340A, 0x11D0, 0x6BA9, [0x00, 0xC0, 0x4F, 0xD7, 0x05, 0xA2]);
 
 pub fn init() {
