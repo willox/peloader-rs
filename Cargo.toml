@@ -10,6 +10,7 @@ windows = "0.7.0"
 region = "2.2.0"
 # com = { git = "https://github.com/microsoft/com-rs", features = ["production"] }
 com = { path = "E:/com-rs", features = ["production"] }
+cef = { path = "E:/cerium-trifluoride/cef" }
 
 # omfg
 auxtools = { git = "https://github.com/willox/auxtools" }
@@ -20,6 +21,7 @@ default-features = false
 
 [build-dependencies]
 windows = "0.7.0"
+cc = "1.0"
 
 [profile.dev]
 panic = "abort"

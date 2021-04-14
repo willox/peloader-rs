@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod browser;
+mod cef;
 mod win32;
 
 use std::{ffi::c_void, os::raw::c_char, path::Path};
@@ -51,6 +52,13 @@ extern "stdcall" fn get_module_file_name_w_hook(handle: usize, buffer: *mut u8, 
 }
 
 fn main() {
+    if std::env::args().any(|x| x.contains("--type=")) {
+        assert!(cef::init());
+        return;
+    }
+
+    std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin");
+
     let scanner = sigscan::Scanner::for_module("ntdll.dll").unwrap();
 
     let get_module_file_name_w = unsafe {

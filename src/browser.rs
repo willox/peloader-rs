@@ -45,6 +45,13 @@ static CLSID_MINE2: com::sys::CLSID = com::sys::CLSID{
 };
 
 unsafe extern "stdcall" fn co_get_class_object_hook(clsid: *const CLSID, b: u32, c: u32, riid: *const CLSID, e: *mut *const c_void) -> u32 {
+    if crate::cef::init() {
+        std::process::abort();
+        return 0;
+    }
+
+    //::cef::cef_do_message_loop_work();
+
     if *clsid == CLSID_WEB_BROWSER {
         let x = WebBrowserClassFactory::allocate();
         let res: i32 = std::mem::transmute(x.QueryInterface(std::mem::transmute(riid), std::mem::transmute(e)));
@@ -350,6 +357,8 @@ impl WebBrowserState {
         unsafe {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
         }
+
+        crate::cef::create(window);
 
         self.in_place_site = Some(in_place_site);
         self.window = Some(window);
