@@ -3,6 +3,7 @@ mod document;
 mod script;
 mod structs;
 
+use std::convert::TryInto;
 use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
 use com::production::ClassAllocation;
 use detour::RawDetour;
@@ -64,6 +65,23 @@ unsafe extern "stdcall" fn get_type_info_count(browser: *mut WebBrowser_Old, cou
 }
 
 com::interfaces! {
+    #[uuid("CF51ED10-62FE-11CF-BF86-00A0C9034836")]
+    pub unsafe interface IQuickActivate : com::interfaces::IUnknown {
+        fn QuickActivate(&self, container: *const structs::QAContainer, control: *mut structs::QAControl) -> com::sys::HRESULT;
+        fn SetContentExtent(&self, size: *const structs::Size) -> com::sys::HRESULT;
+        fn GetContentExtent(&self, size: *const structs::Size) -> com::sys::HRESULT;
+    }
+
+    #[uuid("B196B283-BAB4-101A-B69C-00AA00341D07")]
+    pub unsafe interface IProvideClassInfo : com::interfaces::IUnknown {
+        fn GetClassInfo(&self);
+    }
+
+    #[uuid("A6BC3AC0-DBAA-11CE-9DE3-00AA004BB851")]
+    pub unsafe interface IProvideClassInfo2 : IProvideClassInfo {
+        fn GetGUID(&self, kind: u32, out: *mut com::sys::IID) -> com::sys::HRESULT;
+    }
+
     #[uuid("00000118-0000-0000-C000-000000000046")]
     pub unsafe interface IOleClientSite : com::interfaces::IUnknown {
         fn SaveObject(&self) -> com::sys::HRESULT;
@@ -133,7 +151,11 @@ com::interfaces! {
         fn GoFoward(&self) -> com::sys::HRESULT;
         fn GoHome(&self) -> com::sys::HRESULT;
         fn GoSearch(&self) -> com::sys::HRESULT;
-        fn Navigate(&self, URL: u32, Flags: u32, TargetFrameName: u32, PostData: u32, Headers: u32) -> com::sys::HRESULT;
+
+        #[id(104)]
+        fn Navigate(&self, URL: com::BString, Flags: u32, TargetFrameName: u32, PostData: u32, Headers: u32) -> com::sys::HRESULT;
+
+
         fn Refresh(&self) -> com::sys::HRESULT;
         fn Refresh2(&self, level: u32) -> com::sys::HRESULT;
         fn Stop(&self) -> com::sys::HRESULT;
@@ -278,18 +300,18 @@ struct WebBrowserState {
     pub visible: bool,
     pub silent: bool,
     pub document: ClassAllocation<document::HtmlDocument>,
+    pub client_site: Option<IOleClientSite>,
 }
 
 impl Default for WebBrowserState {
     fn default() -> Self {
-        let document = document::HtmlDocument::allocate();
-
         WebBrowserState {
             width: 0,
             height: 0,
             visible: false,
             silent: false,
-            document,
+            document: document::HtmlDocument::allocate(),
+            client_site: None,
         }
     }
 }
@@ -302,12 +324,62 @@ impl WebBrowser {
 
 com::class! {
     class WebBrowser
-        : IOleObject
+        : IQuickActivate
+        , IProvideClassInfo2(IProvideClassInfo)
+        , IOleObject
         , IOleControl
         , IOleCommandTarget
         , IOleInPlaceObject(IOleWindow)
         , IWebBrowser2(IWebBrowserApp(IWebBrowser($IDispatch))) {
         state: RefCell<WebBrowserState>,
+    }
+
+    impl IQuickActivate for WebBrowser {
+        fn QuickActivate(&self, container: *const structs::QAContainer, control: *mut structs::QAControl) -> com::sys::HRESULT {
+            let mut state = self.state();
+            state.client_site = unsafe {
+                Some(std::mem::transmute((*container).client_site))
+            };
+
+            unsafe {
+                (*control).misc_status = 0;
+                (*control).view_status = 0;
+                (*control).event_cookie = 0;
+                (*control).prop_notify_cookie = 0;
+                (*control).pointer_activation_policy = 0;
+            }
+
+            com::sys::S_OK
+        }
+        fn SetContentExtent(&self, size: *const structs::Size) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+        fn GetContentExtent(&self, size: *const structs::Size) -> com::sys::HRESULT {
+            unimplemented!()
+        }
+    }
+
+    impl IProvideClassInfo for WebBrowser {
+        fn GetClassInfo(&self) {
+            unimplemented!()
+        }
+    }
+
+    impl IProvideClassInfo2 for WebBrowser {
+        fn GetGUID(&self, kind: u32, out: *mut com::sys::IID) -> com::sys::HRESULT {
+            // GUIDKIND_DEFAULT_SOURCE_DISP_IID
+            if kind == 1 {
+                unsafe {
+                    (*out).data1 = 0xD30C1661;
+                    (*out).data2 = 0xCDAF;
+                    (*out).data3 = 0x11d0;
+                    (*out).data4 = [0x8A, 0x3E, 0x00, 0xC0, 0x4F, 0xC9, 0xE2, 0x6E];
+                }
+                return com::sys::S_OK;
+            }
+
+            unimplemented!()
+        }
     }
 
     impl IOleObject for WebBrowser {
@@ -341,6 +413,7 @@ com::class! {
                 constants::OLEIVERB_OPEN |
                 constants::OLEIVERB_HIDE |
                 constants::OLEIVERB_INPLACEACTIVATE => {
+                    println!("DoVerb({:?})", iVerb);
                     com::sys::S_OK
                 }
 
@@ -471,8 +544,10 @@ com::class! {
         fn GoSearch(&self) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn Navigate(&self, URL: u32, Flags: u32, TargetFrameName: u32, PostData: u32, Headers: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn Navigate(&self, URL: com::BString, Flags: u32, TargetFrameName: u32, PostData: u32, Headers: u32) -> com::sys::HRESULT {
+            let url: String = (&URL).try_into().unwrap();
+            println!("Navigate({:?})", url);
+            com::sys::S_OK
         }
         fn Refresh(&self) -> com::sys::HRESULT {
             unimplemented!()

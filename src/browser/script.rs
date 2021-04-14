@@ -9,12 +9,12 @@ com::interfaces! {
 }
 
 #[repr(C)]
-struct Variant {
-    var_type: com::TypeDescVarType,
-    _1: u16,
-    _2: u16,
-    _3: u16,
-    string: com::BString,
+pub struct Variant {
+    pub var_type: com::TypeDescVarType,
+    pub _1: u16,
+    pub _2: u16,
+    pub _3: u16,
+    pub string: com::BString,
 }
 
 com::class! {

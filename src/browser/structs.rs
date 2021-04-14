@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 
 // Move to types?
 pub type VerbId = i32;
@@ -69,4 +71,21 @@ unsafe impl com::AbiTransferable for VariantBool {
     fn set_abi(&mut self) -> *mut Self::Abi {
         self as *mut Self::Abi
     }
+}
+
+#[repr(C)]
+pub struct QAContainer {
+    pub self_size: u32,
+    pub client_site: *mut c_void,
+    // ...
+}
+
+#[repr(C)]
+pub struct QAControl {
+    pub self_size: u32,
+    pub misc_status: u32,
+    pub view_status: u32,
+    pub event_cookie: u32,
+    pub prop_notify_cookie: u32,
+    pub pointer_activation_policy: u32,
 }
