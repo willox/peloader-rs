@@ -77,6 +77,9 @@ unsafe impl com::AbiTransferable for VariantBool {
 pub struct QAContainer {
     pub self_size: u32,
     pub client_site: *mut c_void,
+    pub advise_sink: *mut c_void,
+    pub property_sink: *mut c_void,
+    pub event_sink: *mut c_void,
     // ...
 }
 
@@ -88,4 +91,23 @@ pub struct QAControl {
     pub event_cookie: u32,
     pub prop_notify_cookie: u32,
     pub pointer_activation_policy: u32,
+}
+
+
+#[repr(C)]
+pub struct Variant {
+    pub var_type: com::TypeDescVarType,
+    pub _1: u16,
+    pub _2: u16,
+    pub _3: u16,
+    pub string: *const Variant,
+    pub _4: u32,
+}
+
+#[repr(C)]
+pub struct DispParams {
+    pub args: *const Variant,
+    pub named_args: *const c_void,
+    pub arg_count: u32,
+    pub named_arg_count: u32,
 }

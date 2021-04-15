@@ -15,6 +15,8 @@ use crate::win32;
 #[derive(PartialEq)]
 struct CLSID(u32, u16, u16, u16, [u8; 6]);
 
+static IID_DWebBrowserEvents2: CLSID = CLSID(0x34A715A0, 0x6587, 0x11D0, 0x924A, [0x00, 0x20, 0xAF, 0xC7, 0xAC, 0x4D]);
+
 static CLSID_NULL: CLSID = CLSID(0, 0, 0, 0, [0;6]);
 
 static CLSID_WEB_BROWSER: CLSID = CLSID(0x8856F961, 0x340A, 0x11D0, 0x6BA9, [0x00, 0xC0, 0x4F, 0xD7, 0x05, 0xA2]);
@@ -76,7 +78,23 @@ unsafe extern "stdcall" fn get_type_info_count(browser: *mut WebBrowser_Old, cou
 }
 
 com::interfaces! {
+    #[uuid("34A715A0-6587-11D0-924A-0020AFC7AC4D")]
+    pub unsafe interface DWebBrowserEvents2 : $IDispatch {}
 
+    #[uuid("B196B286-BAB4-101A-B69C-00AA00341D07")]
+    pub unsafe interface IConnectionPoint : com::interfaces::IUnknown {
+        fn GetConnectionInterface(&self);
+        fn GetConnectionPointContainer(&self);
+        fn Advise(&self);
+        fn Unadvise(&self);
+        fn EnumConnections(&self);
+    }
+
+    #[uuid("B196B284-BAB4-101A-B69C-00AA00341D07")]
+    pub unsafe interface IConnectionPointContainer : com::interfaces::IUnknown {
+        fn EnumConnectionPoints(&self);
+        fn FindConnectionPoint(&self, riid: u32, connection_point: u32) -> com::sys::HRESULT;
+    }
 
     #[uuid("0000010c-0000-0000-C000-000000000046")]
     pub unsafe interface IPersist : com::interfaces::IUnknown {
@@ -341,6 +359,7 @@ pub struct WebBrowserState {
     pub silent: bool,
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
+    pub client_sink: Option<com::interfaces::IDispatch>,
     pub in_place_site: Option<IOleInPlaceSite>,
     pub window: Option<win32::HWND>,
     pub url: Option<String>,
@@ -351,9 +370,132 @@ pub struct WebBrowserState {
 impl WebBrowserRef {
     fn activate(&self) {
         let mut state = self.inner.borrow_mut();
-
         let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
         let mut parent = win32::HWND::default();
+
+        let var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(12u16 | 0x4000u16)
+        };
+
+        let bool_var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(11u16 | 0x4000u16)
+        };
+
+        let array_var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(8192u16 | 17u16)
+        };
+
+        let str_arg = structs::Variant {
+            var_type: com::TypeDescVarType::BStr,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(com::BString::from("Hello")) },
+            _4: 0,
+        };
+
+        let i4_arg = structs::Variant {
+            var_type: com::TypeDescVarType::I4,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(1337) },
+            _4: 0,
+        };
+
+
+        let array_arg = structs::Variant {
+            var_type: array_var_type,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(1337) },
+            _4: 0,
+        };
+
+
+        let args: [structs::Variant; 7] = [
+            structs::Variant {
+                var_type: bool_var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type: var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &array_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &i4_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type: com::TypeDescVarType::Dispatch,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg as *const _,
+                _4: 0,
+            },
+        ];
+
+        let mut result = structs::Variant {
+            var_type: com::TypeDescVarType::Empty,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: std::ptr::null(),
+            _4: 0,
+        };
+
+        let disp_params = structs::DispParams {
+            args: &args as *const _,
+            named_args: std::ptr::null(),
+            arg_count: 7,
+            named_arg_count: 0,
+
+        };
+
+        if let Some(sink) = &state.client_sink {
+            unsafe {
+                let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
+                println!("Invoke ret: {}", x);
+            }
+        }
 
         unsafe {
             in_place_site.GetWindow(&mut parent);
@@ -405,6 +547,7 @@ impl Default for WebBrowserState {
             silent: false,
             document: None,
             client_site: None,
+            client_sink: None,
             in_place_site: None,
             window: None,
             url: None,
@@ -442,7 +585,8 @@ impl WebBrowser {
 
 com::class! {
     class WebBrowser
-        : IPersistMemory(IPersist)
+        : IConnectionPointContainer
+        , IPersistMemory(IPersist)
         , IQuickActivate
         , IProvideClassInfo2(IProvideClassInfo)
         , IOleObject
@@ -451,6 +595,19 @@ com::class! {
         , IOleInPlaceObject(IOleWindow)
         , IWebBrowser2(IWebBrowserApp(IWebBrowser($IDispatch))) {
         state_ref: WebBrowserRef,
+    }
+
+    impl IConnectionPointContainer for WebBrowser {
+        fn EnumConnectionPoints(&self) {
+            unimplemented!()
+        }
+        fn FindConnectionPoint(&self, riid: u32, connection_point: u32) -> com::sys::HRESULT {
+            let ptr = riid as *const com::sys::IID;
+            println!("FindConnectionPoint {}", unsafe { *ptr });
+            unsafe {
+                std::mem::transmute(0x80040200u32)
+            }
+        }
     }
 
     impl IPersist for WebBrowser {
@@ -480,6 +637,24 @@ com::class! {
             state.client_site = unsafe {
                 Some(std::mem::transmute((*container).client_site))
             };
+
+
+            let sink: com::interfaces::IUnknown = unsafe {
+                std::mem::transmute((*container).event_sink)
+            };
+
+            unsafe {
+                sink.AddRef();
+            }
+
+            if let Some(sink) = sink.query_interface::<com::interfaces::IDispatch>() {
+                state.client_sink = Some(sink);
+            }
+
+            if let Some(sink) = sink.query_interface::<DWebBrowserEvents2>() {
+                unreachable!()
+                // weird
+            }
 
             unsafe {
                 (*control).misc_status = 0;
@@ -594,8 +769,6 @@ com::class! {
 
             state.width = w;
             state.height = h;
-
-            println!("{}, {}", w, h);
 
             if let Some(window) = state.window {
                 unsafe {

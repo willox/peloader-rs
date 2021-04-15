@@ -127,7 +127,6 @@ com::class! {
     {
         state_ref: crate::browser::WebBrowserRef,
     }
-
     impl IHtmlDocument for HtmlDocument {
         pub fn get_Script(&self, out: *mut u32) -> com::sys::HRESULT {
             let script = script::Script::allocate(self.state_ref.clone());

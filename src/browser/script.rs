@@ -9,7 +9,7 @@ com::interfaces! {
 }
 
 #[repr(C)]
-pub struct Variant {
+pub struct VariantHack {
     pub var_type: com::TypeDescVarType,
     pub _1: u16,
     pub _2: u16,
@@ -46,7 +46,7 @@ com::class! {
             excep_info: *mut u32,
             arg_err: *mut u32,
         ) -> com::sys::HRESULT {
-            let params = params as *const *const Variant;
+            let params = params as *const *const VariantHack;
             let data: String = unsafe {
                 (&(**params).string).try_into().unwrap()
             };
