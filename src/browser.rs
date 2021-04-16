@@ -879,8 +879,8 @@ com::class! {
             }
 
             let (w, h) = unsafe {
-                (((*size).width as f64 * 0.037795280352161) as i32,
-                ((*size).height as f64 * 0.037795280352161) as i32)
+                (((*size).width as f64 * 0.037795280352161).ceil() as i32,
+                ((*size).height as f64 * 0.037795280352161).ceil() as i32)
             };
 
             {

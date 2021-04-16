@@ -25,7 +25,7 @@ extern "system" fn window_proc(
 pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) -> win32::HWND {
     unsafe {
         let hwnd = win32::CreateWindowExA(
-            win32::WINDOW_EX_STYLE::WS_EX_CLIENTEDGE,
+            win32::WINDOW_EX_STYLE::default(),
             "DreamLoader_WebBrowser",
             "fuk",
             win32::WINDOW_STYLE::WS_CHILD,

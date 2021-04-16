@@ -54,15 +54,10 @@ impl App for MyApp {
     }
 }
 
-struct DevClient;
-
-impl Client for DevClient {
-
-}
-
 struct MyClient {
     life_span_handler: CefLifeSpanHandler,
     request_handler: CefRequestHandler,
+    state: Arc<Mutex<State>>,
 }
 
 impl Client for MyClient {
@@ -72,6 +67,16 @@ impl Client for MyClient {
 
     fn get_request_handler(&mut self) -> Option<CefRequestHandler> {
         Some(self.request_handler.clone())
+    }
+
+    fn on_process_message_received(&mut self, _browser: CefBrowser, _frame: CefFrame, _source_process: CefProcessId, message: CefProcessMessage) -> bool {
+        if message.get_name().to_string() == "cef_to_byond" {
+            let url = message.get_argument_list().unwrap().get_string(0).to_string();
+            self.state.lock().unwrap().send_event(event_queue::Event::UrlNavigate(url));
+            return true;
+        }
+
+        false
     }
 }
 
@@ -113,6 +118,46 @@ impl LifeSpanHandler for MyLifeSpanHandler {
     }
 }
 
+struct MyV8Handler;
+impl V8Handler for MyV8Handler {
+    fn execute(&mut self, name: &CefString, object: CefV8Value, arguments: &[CefV8Value], retval: &mut Option<CefV8Value>, exception: &mut CefString) ->bool {
+        if name.to_string() != "cef_to_byond" {
+            *exception = CefString::new("unknown function in MyV8Handler");
+            return true;
+        }
+
+        if arguments.len() != 1 {
+            *exception = CefString::new("incorrect number of arguments encountered in cef_to_byond");
+            return true;
+        }
+
+        let arg = &arguments[0];
+        if !arg.is_string() {
+            *exception = CefString::new("non-string argument passed encountered in cef_to_byond");
+            return true;
+        }
+
+        let context = CefV8Context::get_current_context().unwrap();
+
+        match context.get_frame() {
+            Some(frame) => {
+                let url = CefString::new(&arg.get_string_value().to_string());
+
+                let msg = CefProcessMessage::create(&CefString::new("cef_to_byond")).unwrap();
+                msg.get_argument_list().unwrap().set_string(0, Some(&url));
+                frame.send_process_message(CefProcessId::BROWSER, msg);
+                *retval = Some(CefV8Value::create_null().unwrap());
+                true
+            }
+
+            None => {
+                *exception = CefString::new("cef_to_byond called outside of a frame (in a web worker?)");
+                true
+            }
+        }
+    }
+}
+
 struct MyRenderProcessHandler;
 impl RenderProcessHandler for MyRenderProcessHandler {
     fn on_context_created(
@@ -121,16 +166,10 @@ impl RenderProcessHandler for MyRenderProcessHandler {
         _frame: CefFrame,
         context: CefV8Context,
     ) -> () {
-        let mut context = context;
-        let mut globals = context.get_global().unwrap();
+        let globals = context.get_global().unwrap();
 
-        let string = CefV8Value::create_string(Some(&CefString::new("test"))).unwrap();
-
-        globals.set_value_bykey(
-            Some(&CefString::new("test")),
-            string,
-            CefV8Propertyattribute::NONE,
-        );
+        let value = CefV8Value::create_function(&CefString::new("cef_to_byond"), MyV8Handler).unwrap();
+        globals.set_value_bykey(Some(&CefString::new("cef_to_byond")), value, CefV8Propertyattribute::READONLY);
     }
 }
 
@@ -190,8 +229,9 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
             state: state.clone(),
         }.into(),
         request_handler: MyRequestHandler {
-            state,
+            state: state.clone(),
         }.into(),
+        state,
     });
 
     let browser_settings = CefBrowserSettings::default();
