@@ -56,7 +56,7 @@ com::class! {
 
             if let Some(browser) = &state.browser {
                 let frame = browser.get_main_frame().unwrap();
-                frame.execute_java_script(&cef::CefString::new(&data), None, 0);
+                frame.execute_java_script(&cef::CefString::new(&data), Some(&cef::CefString::new("_byond.js")), 0);
                 return com::sys::S_OK;
             }
 

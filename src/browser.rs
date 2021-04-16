@@ -598,7 +598,7 @@ impl WebBrowserRef {
         let window = window::create(parent, self);
 
         unsafe {
-            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
+            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_SHOWNOACTIVATE);
         }
 
         let event_sender = state.event_sender.take().unwrap();
@@ -625,7 +625,7 @@ impl WebBrowserRef {
             }
 
             for code in &state.scripts {
-                frame.execute_java_script(&cef::CefString::new(code), None, 0);
+                frame.execute_java_script(&cef::CefString::new(code), Some(&cef::CefString::new("_byond.js")), 0);
             }
 
             state.browser = Some(browser);
