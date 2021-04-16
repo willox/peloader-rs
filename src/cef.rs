@@ -1,12 +1,17 @@
-use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
+use std::{sync::{Arc, Mutex}};
 
 use cef::*;
 use crate::win32;
+use crate::browser::event_queue;
 
 pub struct Resizer {
     pub browser: CefBrowser,
     pub w: i32,
     pub h: i32,
+}
+
+struct State {
+    event_sender: event_queue::Sender,
 }
 
 impl Task for Resizer {
@@ -61,7 +66,7 @@ impl Client for MyClient {
 }
 
 struct MyRequestHandler {
-    command_queue: Arc<Mutex<Vec<String>>>,
+    state: Arc<Mutex<State>>,
 }
 impl RequestHandler for MyRequestHandler {
     fn on_before_browse(&mut self, browser: CefBrowser, frame: CefFrame, request: CefRequest, user_gesture: bool, is_redirect: bool) -> bool {
@@ -76,8 +81,8 @@ impl RequestHandler for MyRequestHandler {
         let scheme = parts.scheme();
 
         if scheme == "byond" {
-            println!("BYOND EXEC: {}", url);
-            self.command_queue.lock().unwrap().push(url);
+            println!("UrlNavigate: {}", url);
+            self.state.lock().unwrap().event_sender.send(event_queue::Event::UrlNavigate(url));
             return true;
         }
 
@@ -90,29 +95,11 @@ impl RequestHandler for MyRequestHandler {
 }
 
 struct MyLifeSpanHandler {
-    parent: win32::HWND,
-    state_ref: crate::browser::WebBrowserRef,
+    state: Arc<Mutex<State>>,
 }
 impl LifeSpanHandler for MyLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefBrowser) {
-
-        /*
-        let window_info = unsafe {
-            CefWindowInfo::default()
-                .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0)
-                .set_x(-1)
-                .set_y(-1)
-                .set_width(1024)
-                .set_height(512)
-                .set_window_name("Dev Tools")
-                .set_parent_window(std::mem::transmute(self.parent))
-                .build()
-        };
-
-        browser.get_host().unwrap().show_dev_tools(Some(&window_info), None, None, None);
-        */
-
-        self.state_ref.browser_created(browser);
+        self.state.lock().unwrap().event_sender.send(event_queue::Event::BrowserCreated(browser));
     }
 }
 
@@ -170,7 +157,7 @@ pub fn init() -> bool {
     false
 }
 
-pub fn create(state_ref: crate::browser::WebBrowserRef, mut window: win32::HWND) {
+pub fn create(event_sender: event_queue::Sender, mut window: win32::HWND) {
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0)// | win32::WINDOW_STYLE::WS_DLGFRAME.0)
@@ -183,15 +170,16 @@ pub fn create(state_ref: crate::browser::WebBrowserRef, mut window: win32::HWND)
             .build()
     };
 
-    let state = state_ref.inner.borrow();
+    let state = Arc::new(Mutex::new(State {
+        event_sender,
+    }));
 
     let client = CefClient::new(MyClient {
         life_span_handler: MyLifeSpanHandler {
-            parent: window,
-            state_ref: state_ref.clone(),
+            state: state.clone(),
         }.into(),
         request_handler: MyRequestHandler {
-            command_queue: Arc::clone(&state.command_queue),
+            state,
         }.into(),
     });
 

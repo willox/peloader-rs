@@ -3,6 +3,7 @@ mod document;
 mod script;
 mod structs;
 mod window;
+pub mod event_queue;
 
 use std::{convert::TryInto, rc::Rc, sync::{Arc, Mutex}};
 use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
@@ -353,6 +354,7 @@ com::interfaces! {
 }
 
 pub struct WebBrowserState {
+    pub unknown: Option<com::interfaces::IUnknown>,
     pub width: i32,
     pub height: i32,
     pub visible: bool,
@@ -366,6 +368,8 @@ pub struct WebBrowserState {
     pub scripts: Vec<String>,
     pub browser: Option<cef::CefBrowser>,
     pub command_queue: Arc<Mutex<Vec<String>>>,
+    pub event_receiver: event_queue::Receiver,
+    pub event_sender: Option<event_queue::Sender>,
 }
 
 impl WebBrowserRef {
@@ -400,175 +404,192 @@ impl WebBrowserRef {
         }
     }
 
-
-    fn run_command_queue(&self, unk: com::interfaces::IUnknown) {
-        let (sink, queue) = {
-            let state = self.inner.borrow_mut();
-            let mut queue = state.command_queue.lock().unwrap();
-            (
-                state.client_sink.clone(),
-                std::mem::replace(queue.as_mut(), vec![])
-            )
+    fn process_events(&self) {
+        // Pull all of our events out first so we can process them without holding a reference
+        let events: Vec<_> = {
+            let mut state = self.inner.borrow_mut();
+            state.event_receiver.try_iter().collect()
         };
 
-        // We've dropped the reference to our state at this point
-        // because queue execution can be re-entrant
-        for command in queue {
-            let var_type: com::TypeDescVarType = unsafe {
-                std::mem::transmute(12u16 | 0x4000u16)
-            };
+        for event in events {
+            match event {
+                event_queue::Event::BrowserCreated(browser) => {
+                    self.browser_created(browser);
+                }
 
-            let bool_var_type: com::TypeDescVarType = unsafe {
-                std::mem::transmute(11u16 | 0x4000u16)
-            };
-
-            let array_var_type: com::TypeDescVarType = unsafe {
-                std::mem::transmute(8192u16 | 17u16)
-            };
-
-            let str1 = com::BString::from(command.as_str());
-            let str2 = com::BString::from(command.as_str());
-            let str3 = com::BString::from(command.as_str());
-
-            let str_arg1 = structs::Variant {
-                var_type: com::TypeDescVarType::BStr,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: unsafe { std::mem::transmute(str1) },
-                _4: 0,
-            };
-
-            let str_arg2 = structs::Variant {
-                var_type: com::TypeDescVarType::BStr,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: unsafe { std::mem::transmute(str2) },
-                _4: 0,
-            };
-
-            let str_arg3 = structs::Variant {
-                var_type: com::TypeDescVarType::BStr,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: unsafe { std::mem::transmute(str3) },
-                _4: 0,
-            };
-
-            let bool_arg: u16 = 0;
-
-            let i4_arg = structs::Variant {
-                var_type: com::TypeDescVarType::I4,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: unsafe { std::mem::transmute(0) },
-                _4: 0,
-            };
-
-            let array = com::SafeArray::new(com::TypeDescVarType::Ui1);
-
-            let array_arg = structs::Variant {
-                var_type: array_var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: unsafe { std::mem::transmute(array) },
-                _4: 0,
-            };
-
-            unsafe { unk.AddRef(); }
-            unsafe { unk.AddRef(); }
-
-            let args: [structs::Variant; 7] = [
-                structs::Variant {
-                    var_type: bool_var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: unsafe { std::mem::transmute(&bool_arg as *const _) },
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: &str_arg1 as *const _,
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type: var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: &array_arg as *const _,
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type: var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: &str_arg2 as *const _,
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: &i4_arg as *const _,
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: &str_arg3 as *const _,
-                    _4: 0,
-                },
-                structs::Variant {
-                    var_type: com::TypeDescVarType::Dispatch,
-                    _1: 0,
-                    _2: 0,
-                    _3: 0,
-                    string: unsafe { std::mem::transmute(unk.clone()) },
-                    _4: 0,
-                },
-            ];
-
-            let mut result = structs::Variant {
-                var_type: com::TypeDescVarType::Empty,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: std::ptr::null(),
-                _4: 0,
-            };
-
-            let disp_params = structs::DispParams {
-                args: &args as *const _,
-                named_args: std::ptr::null(),
-                arg_count: 7,
-                named_arg_count: 0,
-
-            };
-
-            if let Some(sink) = &sink {
-                unsafe {
-                    let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
-                    println!("Invoke ret: {}", x);
+                event_queue::Event::UrlNavigate(url) => {
+                    self.url_navigated(url);
                 }
             }
         }
     }
 
-    fn activate(&self) {
+    fn url_navigated(&self, url: String) {
+        let unk = {
+            let state = self.inner.borrow();
+            state.unknown.clone().unwrap()
+        };
+
+        let sink = {
+            let state = self.inner.borrow();
+            state.client_sink.clone()
+        };
+
+        let var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(12u16 | 0x4000u16)
+        };
+
+        let bool_var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(11u16 | 0x4000u16)
+        };
+
+        let array_var_type: com::TypeDescVarType = unsafe {
+            std::mem::transmute(8192u16 | 17u16)
+        };
+
+        let str1 = com::BString::from(url.as_str());
+        let str2 = com::BString::from(url.as_str());
+        let str3 = com::BString::from(url.as_str());
+
+        let str_arg1 = structs::Variant {
+            var_type: com::TypeDescVarType::BStr,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(str1) },
+            _4: 0,
+        };
+
+        let str_arg2 = structs::Variant {
+            var_type: com::TypeDescVarType::BStr,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(str2) },
+            _4: 0,
+        };
+
+        let str_arg3 = structs::Variant {
+            var_type: com::TypeDescVarType::BStr,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(str3) },
+            _4: 0,
+        };
+
+        let bool_arg: u16 = 0;
+
+        let i4_arg = structs::Variant {
+            var_type: com::TypeDescVarType::I4,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(0) },
+            _4: 0,
+        };
+
+        let array = com::SafeArray::new(com::TypeDescVarType::Ui1);
+
+        let array_arg = structs::Variant {
+            var_type: array_var_type,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: unsafe { std::mem::transmute(array) },
+            _4: 0,
+        };
+
+        unsafe { unk.AddRef(); }
+        unsafe { unk.AddRef(); }
+
+        let args: [structs::Variant; 7] = [
+            structs::Variant {
+                var_type: bool_var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(&bool_arg as *const _) },
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg1 as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type: var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &array_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type: var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg2 as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &i4_arg as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: &str_arg3 as *const _,
+                _4: 0,
+            },
+            structs::Variant {
+                var_type: com::TypeDescVarType::Dispatch,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(unk.clone()) },
+                _4: 0,
+            },
+        ];
+
+        let mut result = structs::Variant {
+            var_type: com::TypeDescVarType::Empty,
+            _1: 0,
+            _2: 0,
+            _3: 0,
+            string: std::ptr::null(),
+            _4: 0,
+        };
+
+        let disp_params = structs::DispParams {
+            args: &args as *const _,
+            named_args: std::ptr::null(),
+            arg_count: 7,
+            named_arg_count: 0,
+
+        };
+
+        if let Some(sink) = &sink {
+            unsafe {
+                let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
+                println!("Invoke ret: {}", x);
+            }
+        }
+    }
+
+    fn activate(&self, unknown: com::interfaces::IUnknown) {
         let mut state = self.inner.borrow_mut();
+        state.unknown = Some(unknown);
         let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
         let mut parent = win32::HWND::default();
 
@@ -582,16 +603,17 @@ impl WebBrowserRef {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
         }
 
+        let event_sender = state.event_sender.take().unwrap();
+
         std::mem::drop(state);
-        crate::cef::create(self.clone(), window);
+        crate::cef::create(event_sender, window);
         let mut state = self.inner.borrow_mut();
 
         state.in_place_site = Some(in_place_site);
         state.window = Some(window);
     }
 
-    // WHAT THREAD IS THIS IN
-    pub fn browser_created(&mut self, browser: cef::CefBrowser) {
+    pub fn browser_created(&self, browser: cef::CefBrowser) {
         {
             let mut state = self.inner.borrow_mut();
 
@@ -611,6 +633,7 @@ impl WebBrowserRef {
             state.browser = Some(browser);
         }
 
+        // TODO: This is not in main thread!
         self.on_size_invalidated();
     }
 }
@@ -622,7 +645,10 @@ pub struct WebBrowserRef {
 
 impl Default for WebBrowserState {
     fn default() -> Self {
+        let (event_sender, event_receiver) = event_queue::channel();
+
         Self {
+            unknown: None,
             width: 0,
             height: 0,
             visible: false,
@@ -636,6 +662,8 @@ impl Default for WebBrowserState {
             scripts: vec![],
             browser: None,
             command_queue: Arc::new(Mutex::new(vec![])),
+            event_sender: Some(event_sender),
+            event_receiver,
         }
     }
 }
@@ -815,7 +843,15 @@ com::class! {
                 }
 
                 constants::OLEIVERB_INPLACEACTIVATE => {
-                    self.state_ref.activate();
+
+                    let unk: com::interfaces::IUnknown = unsafe {
+                        std::mem::transmute(self)
+                    };
+                    unsafe {
+                        unk.AddRef();
+                    }
+
+                    self.state_ref.activate(unk);
                     self.state_ref.on_size_invalidated();
                     com::sys::S_OK
                 }
@@ -849,14 +885,7 @@ com::class! {
                 ((*size).height as f64 * 0.037795280352161) as i32)
             };
 
-            {
-                let unk = unsafe {
-                    let unk: com::interfaces::IUnknown = std::mem::transmute(self);
-                    unk.AddRef();
-                    unk
-                };
-                self.state_ref.run_command_queue(unk);
-            }
+            self.state_ref.process_events();
 
             {
                 let mut state = self.state();
