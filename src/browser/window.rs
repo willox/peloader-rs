@@ -8,14 +8,13 @@ extern "system" fn window_proc(
 ) -> win32::LRESULT {
     let mut ps = win32::PAINTSTRUCT::default();
 
-    if message == win32::WM_PAINT {
-        unsafe {
-            let hdc = win32::BeginPaint(hwnd, &mut ps);
-            win32::TextOutA(hdc, 0, 0, "Step 1) Delete internet explorer Step 2) ??? Step 3) Profit", 57);
-            win32::EndPaint(hwnd, &mut ps);
+    if message == 0x0400 {
+        let state_ref: &crate::browser::WebBrowserRef = unsafe {
+            let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default()) as *const crate::browser::WebBrowserRef;
+            std::mem::transmute(ptr)
+        };
 
-        }
-        return win32::LRESULT::default();
+        state_ref.process_events();
     }
 
     unsafe {
@@ -23,9 +22,9 @@ extern "system" fn window_proc(
     }
 }
 
-pub fn create(parent: win32::HWND) -> win32::HWND {
+pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) -> win32::HWND {
     unsafe {
-        win32::CreateWindowExA(
+        let hwnd = win32::CreateWindowExA(
             win32::WINDOW_EX_STYLE::WS_EX_CLIENTEDGE,
             "DreamLoader_WebBrowser",
             "fuk",
@@ -38,7 +37,12 @@ pub fn create(parent: win32::HWND) -> win32::HWND {
             win32::HMENU::default(),
             win32::HINSTANCE::default(),
             std::ptr::null_mut()
-        )
+        );
+
+        let ptr: *const _ = state_ref;
+        win32::SetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default(), ptr as _);
+
+        hwnd
     }
 }
 
@@ -47,6 +51,7 @@ pub fn init() {
         win32::WNDCLASSA {
             lpszClassName: std::mem::transmute(b"DreamLoader_WebBrowser\0".as_ptr()),
             lpfnWndProc: Some(window_proc),
+            cbWndExtra: 4,
             ..Default::default()
         }
     };

@@ -385,8 +385,6 @@ impl WebBrowserRef {
             )
         };
 
-        println!("Size invalidated {}, {}", width, height);
-
         if let Some(window) = window {
             unsafe {
                 assert_ne!(win32::SetWindowPos(window, win32::HWND::default(), 0, 0, width, height, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
@@ -407,7 +405,7 @@ impl WebBrowserRef {
     fn process_events(&self) {
         // Pull all of our events out first so we can process them without holding a reference
         let events: Vec<_> = {
-            let mut state = self.inner.borrow_mut();
+            let state = self.inner.borrow_mut();
             state.event_receiver.try_iter().collect()
         };
 
@@ -597,7 +595,7 @@ impl WebBrowserRef {
             in_place_site.GetWindow(&mut parent);
         }
 
-        let window = window::create(parent);
+        let window = window::create(parent, self);
 
         unsafe {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
@@ -606,7 +604,7 @@ impl WebBrowserRef {
         let event_sender = state.event_sender.take().unwrap();
 
         std::mem::drop(state);
-        crate::cef::create(event_sender, window);
+        crate::cef::create(window, event_sender);
         let mut state = self.inner.borrow_mut();
 
         state.in_place_site = Some(in_place_site);
@@ -884,8 +882,6 @@ com::class! {
                 (((*size).width as f64 * 0.037795280352161) as i32,
                 ((*size).height as f64 * 0.037795280352161) as i32)
             };
-
-            self.state_ref.process_events();
 
             {
                 let mut state = self.state();

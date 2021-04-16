@@ -11,7 +11,17 @@ pub struct Resizer {
 }
 
 struct State {
+    parent: win32::HWND,
     event_sender: event_queue::Sender,
+}
+
+impl State {
+    fn send_event(&self, event: event_queue::Event) {
+        self.event_sender.send(event).unwrap();
+        unsafe {
+            win32::SendNotifyMessageA(self.parent, 0x0400, win32::WPARAM::default(), win32::LPARAM::default());
+        }
+    }
 }
 
 impl Task for Resizer {
@@ -82,7 +92,7 @@ impl RequestHandler for MyRequestHandler {
 
         if scheme == "byond" {
             println!("UrlNavigate: {}", url);
-            self.state.lock().unwrap().event_sender.send(event_queue::Event::UrlNavigate(url));
+            self.state.lock().unwrap().send_event(event_queue::Event::UrlNavigate(url));
             return true;
         }
 
@@ -99,7 +109,7 @@ struct MyLifeSpanHandler {
 }
 impl LifeSpanHandler for MyLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefBrowser) {
-        self.state.lock().unwrap().event_sender.send(event_queue::Event::BrowserCreated(browser));
+        self.state.lock().unwrap().send_event(event_queue::Event::BrowserCreated(browser));
     }
 }
 
@@ -157,7 +167,7 @@ pub fn init() -> bool {
     false
 }
 
-pub fn create(event_sender: event_queue::Sender, mut window: win32::HWND) {
+pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0)// | win32::WINDOW_STYLE::WS_DLGFRAME.0)
@@ -166,11 +176,12 @@ pub fn create(event_sender: event_queue::Sender, mut window: win32::HWND) {
             .set_width(512)
             .set_height(512)
             .set_window_name("hello, world!")
-            .set_parent_window(std::mem::transmute(window))
+            .set_parent_window(std::mem::transmute(parent))
             .build()
     };
 
     let state = Arc::new(Mutex::new(State {
+        parent,
         event_sender,
     }));
 
@@ -185,16 +196,14 @@ pub fn create(event_sender: event_queue::Sender, mut window: win32::HWND) {
 
     let browser_settings = CefBrowserSettings::default();
 
-    let mut host = CefBrowserHost::create_browser(
+    assert!(CefBrowserHost::create_browser(
         &window_info,
         Some(client.clone()),
         Some(&cef::CefString::new("https://html5test.com/")),
         &browser_settings,
         None,
         None,
-    );
-
-    std::mem::forget(host);
+    ));
 }
 
 pub fn shutdown() {
