@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
 use cef::*;
 use crate::win32;
@@ -60,7 +60,9 @@ impl Client for MyClient {
     }
 }
 
-struct MyRequestHandler;
+struct MyRequestHandler {
+    command_queue: Arc<Mutex<Vec<String>>>,
+}
 impl RequestHandler for MyRequestHandler {
     fn on_before_browse(&mut self, browser: CefBrowser, frame: CefFrame, request: CefRequest, user_gesture: bool, is_redirect: bool) -> bool {
         let mut parts = CefURLParts::default();
@@ -75,6 +77,7 @@ impl RequestHandler for MyRequestHandler {
 
         if scheme == "byond" {
             println!("BYOND EXEC: {}", url);
+            self.command_queue.lock().unwrap().push(url);
             return true;
         }
 
@@ -180,12 +183,16 @@ pub fn create(state_ref: crate::browser::WebBrowserRef, mut window: win32::HWND)
             .build()
     };
 
+    let state = state_ref.inner.borrow();
+
     let client = CefClient::new(MyClient {
         life_span_handler: MyLifeSpanHandler {
             parent: window,
-            state_ref
+            state_ref: state_ref.clone(),
         }.into(),
-        request_handler: MyRequestHandler.into(),
+        request_handler: MyRequestHandler {
+            command_queue: Arc::clone(&state.command_queue),
+        }.into(),
     });
 
     let browser_settings = CefBrowserSettings::default();

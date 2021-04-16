@@ -4,7 +4,7 @@ mod script;
 mod structs;
 mod window;
 
-use std::{convert::TryInto, rc::Rc};
+use std::{convert::TryInto, rc::Rc, sync::{Arc, Mutex}};
 use std::{cell::{RefCell, RefMut}, ffi::c_void, pin::Pin};
 use com::production::ClassAllocation;
 use detour::RawDetour;
@@ -218,7 +218,7 @@ com::interfaces! {
         fn Refresh2(&self, level: u32) -> com::sys::HRESULT;
         fn Stop(&self) -> com::sys::HRESULT;
         fn get_Application(&self, ppDisp: u32) -> com::sys::HRESULT;
-        fn get_Parent(&self, ppDisp: u32) -> com::sys::HRESULT;
+        fn get_Parent(&self, ppDisp: *mut *mut u32) -> com::sys::HRESULT;
         fn get_Container(&self, ppDisp: u32) -> com::sys::HRESULT;
 
         #[get]
@@ -353,8 +353,8 @@ com::interfaces! {
 }
 
 pub struct WebBrowserState {
-    pub width: u32,
-    pub height: u32,
+    pub width: i32,
+    pub height: i32,
     pub visible: bool,
     pub silent: bool,
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
@@ -365,137 +365,212 @@ pub struct WebBrowserState {
     pub url: Option<String>,
     pub scripts: Vec<String>,
     pub browser: Option<cef::CefBrowser>,
+    pub command_queue: Arc<Mutex<Vec<String>>>,
 }
 
 impl WebBrowserRef {
+    fn on_size_invalidated(&self) {
+        // SetWindowPos can be re-entrant
+        let (width, height, window, browser) = {
+            let state = self.inner.borrow_mut();
+            (
+                state.width,
+                state.height,
+                state.window.clone(),
+                state.browser.clone()
+            )
+        };
+
+        println!("Size invalidated {}, {}", width, height);
+
+        if let Some(window) = window {
+            unsafe {
+                assert_ne!(win32::SetWindowPos(window, win32::HWND::default(), 0, 0, width, height, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
+            }
+        }
+
+        if let Some(browser) = browser {
+            let task = ::cef::CefTask::new(crate::cef::Resizer {
+                browser: browser.to_owned(),
+                w: width,
+                h: height,
+            });
+
+            ::cef::cef_post_task(::cef::CefThreadId::UI, task);
+        }
+    }
+
+
+    fn run_command_queue(&self, unk: com::interfaces::IUnknown) {
+        let (sink, queue) = {
+            let state = self.inner.borrow_mut();
+            let mut queue = state.command_queue.lock().unwrap();
+            (
+                state.client_sink.clone(),
+                std::mem::replace(queue.as_mut(), vec![])
+            )
+        };
+
+        // We've dropped the reference to our state at this point
+        // because queue execution can be re-entrant
+        for command in queue {
+            let var_type: com::TypeDescVarType = unsafe {
+                std::mem::transmute(12u16 | 0x4000u16)
+            };
+
+            let bool_var_type: com::TypeDescVarType = unsafe {
+                std::mem::transmute(11u16 | 0x4000u16)
+            };
+
+            let array_var_type: com::TypeDescVarType = unsafe {
+                std::mem::transmute(8192u16 | 17u16)
+            };
+
+            let str1 = com::BString::from(command.as_str());
+            let str2 = com::BString::from(command.as_str());
+            let str3 = com::BString::from(command.as_str());
+
+            let str_arg1 = structs::Variant {
+                var_type: com::TypeDescVarType::BStr,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(str1) },
+                _4: 0,
+            };
+
+            let str_arg2 = structs::Variant {
+                var_type: com::TypeDescVarType::BStr,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(str2) },
+                _4: 0,
+            };
+
+            let str_arg3 = structs::Variant {
+                var_type: com::TypeDescVarType::BStr,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(str3) },
+                _4: 0,
+            };
+
+            let bool_arg: u16 = 0;
+
+            let i4_arg = structs::Variant {
+                var_type: com::TypeDescVarType::I4,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(0) },
+                _4: 0,
+            };
+
+            let array = com::SafeArray::new(com::TypeDescVarType::Ui1);
+
+            let array_arg = structs::Variant {
+                var_type: array_var_type,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: unsafe { std::mem::transmute(array) },
+                _4: 0,
+            };
+
+            unsafe { unk.AddRef(); }
+            unsafe { unk.AddRef(); }
+
+            let args: [structs::Variant; 7] = [
+                structs::Variant {
+                    var_type: bool_var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: unsafe { std::mem::transmute(&bool_arg as *const _) },
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: &str_arg1 as *const _,
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type: var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: &array_arg as *const _,
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type: var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: &str_arg2 as *const _,
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: &i4_arg as *const _,
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: &str_arg3 as *const _,
+                    _4: 0,
+                },
+                structs::Variant {
+                    var_type: com::TypeDescVarType::Dispatch,
+                    _1: 0,
+                    _2: 0,
+                    _3: 0,
+                    string: unsafe { std::mem::transmute(unk.clone()) },
+                    _4: 0,
+                },
+            ];
+
+            let mut result = structs::Variant {
+                var_type: com::TypeDescVarType::Empty,
+                _1: 0,
+                _2: 0,
+                _3: 0,
+                string: std::ptr::null(),
+                _4: 0,
+            };
+
+            let disp_params = structs::DispParams {
+                args: &args as *const _,
+                named_args: std::ptr::null(),
+                arg_count: 7,
+                named_arg_count: 0,
+
+            };
+
+            if let Some(sink) = &sink {
+                unsafe {
+                    let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
+                    println!("Invoke ret: {}", x);
+                }
+            }
+        }
+    }
+
     fn activate(&self) {
         let mut state = self.inner.borrow_mut();
         let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
         let mut parent = win32::HWND::default();
-
-        let var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(12u16 | 0x4000u16)
-        };
-
-        let bool_var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(11u16 | 0x4000u16)
-        };
-
-        let array_var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(8192u16 | 17u16)
-        };
-
-        let str_arg = structs::Variant {
-            var_type: com::TypeDescVarType::BStr,
-            _1: 0,
-            _2: 0,
-            _3: 0,
-            string: unsafe { std::mem::transmute(com::BString::from("Hello")) },
-            _4: 0,
-        };
-
-        let i4_arg = structs::Variant {
-            var_type: com::TypeDescVarType::I4,
-            _1: 0,
-            _2: 0,
-            _3: 0,
-            string: unsafe { std::mem::transmute(1337) },
-            _4: 0,
-        };
-
-
-        let array_arg = structs::Variant {
-            var_type: array_var_type,
-            _1: 0,
-            _2: 0,
-            _3: 0,
-            string: unsafe { std::mem::transmute(1337) },
-            _4: 0,
-        };
-
-
-        let args: [structs::Variant; 7] = [
-            structs::Variant {
-                var_type: bool_var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &str_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &str_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type: var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &array_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &str_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &i4_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &str_arg as *const _,
-                _4: 0,
-            },
-            structs::Variant {
-                var_type: com::TypeDescVarType::Dispatch,
-                _1: 0,
-                _2: 0,
-                _3: 0,
-                string: &str_arg as *const _,
-                _4: 0,
-            },
-        ];
-
-        let mut result = structs::Variant {
-            var_type: com::TypeDescVarType::Empty,
-            _1: 0,
-            _2: 0,
-            _3: 0,
-            string: std::ptr::null(),
-            _4: 0,
-        };
-
-        let disp_params = structs::DispParams {
-            args: &args as *const _,
-            named_args: std::ptr::null(),
-            arg_count: 7,
-            named_arg_count: 0,
-
-        };
-
-        if let Some(sink) = &state.client_sink {
-            unsafe {
-                let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
-                println!("Invoke ret: {}", x);
-            }
-        }
 
         unsafe {
             in_place_site.GetWindow(&mut parent);
@@ -507,35 +582,42 @@ impl WebBrowserRef {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_NORMAL);
         }
 
+        std::mem::drop(state);
         crate::cef::create(self.clone(), window);
+        let mut state = self.inner.borrow_mut();
 
         state.in_place_site = Some(in_place_site);
         state.window = Some(window);
     }
 
+    // WHAT THREAD IS THIS IN
     pub fn browser_created(&mut self, browser: cef::CefBrowser) {
-        let mut state = self.inner.borrow_mut();
+        {
+            let mut state = self.inner.borrow_mut();
 
-        assert!(state.browser.is_none());
+            assert!(state.browser.is_none());
 
-        let frame = browser.get_main_frame().unwrap();
+            let frame = browser.get_main_frame().unwrap();
 
-        if let Some(url) = &state.url {
-            println!("Cached Navigate {}", url);
-            frame.load_url(&cef::CefString::new(url));
+            if let Some(url) = &state.url {
+                println!("Cached Navigate {}", url);
+                frame.load_url(&cef::CefString::new(url));
+            }
+
+            for code in &state.scripts {
+                frame.execute_java_script(&cef::CefString::new(code), None, 0);
+            }
+
+            state.browser = Some(browser);
         }
 
-        for code in &state.scripts {
-            frame.execute_java_script(&cef::CefString::new(code), None, 0);
-        }
-
-        state.browser = Some(browser);
+        self.on_size_invalidated();
     }
 }
 
 #[derive(Clone)]
 pub struct WebBrowserRef {
-    inner: Rc<RefCell<WebBrowserState>>,
+    pub inner: Rc<RefCell<WebBrowserState>>,
 }
 
 impl Default for WebBrowserState {
@@ -553,6 +635,7 @@ impl Default for WebBrowserState {
             url: None,
             scripts: vec![],
             browser: None,
+            command_queue: Arc::new(Mutex::new(vec![])),
         }
     }
 }
@@ -733,6 +816,7 @@ com::class! {
 
                 constants::OLEIVERB_INPLACEACTIVATE => {
                     self.state_ref.activate();
+                    self.state_ref.on_size_invalidated();
                     com::sys::S_OK
                 }
 
@@ -761,31 +845,26 @@ com::class! {
             }
 
             let (w, h) = unsafe {
-                (((*size).width as f64 * 0.037795280352161) as u32,
-                ((*size).height as f64 * 0.037795280352161) as u32)
+                (((*size).width as f64 * 0.037795280352161) as i32,
+                ((*size).height as f64 * 0.037795280352161) as i32)
             };
 
-            let mut state = self.state();
-
-            state.width = w;
-            state.height = h;
-
-            if let Some(window) = state.window {
-                unsafe {
-                    assert_ne!(win32::SetWindowPos(window, win32::HWND::default(), 0, 0, w as i32, h as i32, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
-                }
+            {
+                let unk = unsafe {
+                    let unk: com::interfaces::IUnknown = std::mem::transmute(self);
+                    unk.AddRef();
+                    unk
+                };
+                self.state_ref.run_command_queue(unk);
             }
 
-            if let Some(browser) = &state.browser {
-                let task = ::cef::CefTask::new(crate::cef::Resizer {
-                    browser: browser.to_owned(),
-                    w: w as i32,
-                    h: h as i32,
-                });
-
-                ::cef::cef_post_task(::cef::CefThreadId::UI, task);
+            {
+                let mut state = self.state();
+                state.width = w;
+                state.height = h;
             }
 
+            self.state_ref.on_size_invalidated();
             com::sys::S_OK
         }
         fn GetExtent(&self, aspect: structs::DataViewAspect, size: *mut structs::Size) -> com::sys::HRESULT {
@@ -913,8 +992,16 @@ com::class! {
         fn get_Application(&self, ppDisp: u32) -> com::sys::HRESULT {
             unimplemented!()
         }
-        fn get_Parent(&self, ppDisp: u32) -> com::sys::HRESULT {
-            unimplemented!()
+        fn get_Parent(&self, ppDisp: *mut *mut u32) -> com::sys::HRESULT {
+            let mut state = self.state();
+
+            let unk: com::interfaces::IDispatch = state.client_site.as_ref().unwrap().query_interface().unwrap();
+            unsafe {
+                unk.AddRef();
+                *ppDisp = std::mem::transmute(unk);
+            }
+
+            com::sys::S_OK
         }
         fn get_Container(&self, ppDisp: u32) -> com::sys::HRESULT {
             unimplemented!()

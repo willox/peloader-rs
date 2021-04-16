@@ -46,11 +46,21 @@ com::class! {
             excep_info: *mut u32,
             arg_err: *mut u32,
         ) -> com::sys::HRESULT {
+            let mut state = self.state_ref.inner.borrow_mut();
+
             let params = params as *const *const VariantHack;
             let data: String = unsafe {
                 (&(**params).string).try_into().unwrap()
             };
             println!("exec({:?}", data);
+
+            if let Some(browser) = &state.browser {
+                let frame = browser.get_main_frame().unwrap();
+                frame.execute_java_script(&cef::CefString::new(&data), None, 0);
+                return com::sys::S_OK;
+            }
+
+            state.scripts.push(data);
             com::sys::S_OK
         }
     }

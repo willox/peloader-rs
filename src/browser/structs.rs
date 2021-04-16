@@ -7,8 +7,8 @@ pub type VerbId = i32;
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Size {
-    pub width: u32,
-    pub height: u32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[repr(u32)]
@@ -110,4 +110,14 @@ pub struct DispParams {
     pub named_args: *const c_void,
     pub arg_count: u32,
     pub named_arg_count: u32,
+}
+
+#[repr(C)]
+pub struct SafeArray {
+    pub dimensions: u16,
+    pub features: u16,
+    pub elements: u32,
+    pub locks: u32,
+    pub bound_elements: u32,
+    pub bound_bounds: i32,
 }
