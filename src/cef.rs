@@ -17,6 +17,8 @@ struct State {
 
 impl State {
     fn send_event(&self, event: event_queue::Event) {
+        // TODO: Window might have been destroyed
+        // TODO: Sender might have been destroyed
         self.event_sender.send(event).unwrap();
         unsafe {
             win32::SendNotifyMessageA(
