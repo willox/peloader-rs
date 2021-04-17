@@ -119,7 +119,7 @@ com::interfaces! {
 
     #[uuid("00000112-0000-0000-C000-000000000046")]
     pub unsafe interface IOleObject : com::interfaces::IUnknown {
-        fn SetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT;
+        fn SetClientSite(&self, site: Option<IOleClientSite>) -> com::sys::HRESULT;
         fn GetClientSite(&self, site: IOleClientSite) -> com::sys::HRESULT;
         fn SetHostNames(&self, szContainerApp: u32, szContainerObj: u32) -> com::sys::HRESULT;
         fn Close(&self, dwSaveOption: u32) -> com::sys::HRESULT;
@@ -342,7 +342,6 @@ pub struct WebBrowserState {
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
     pub client_sink: Option<com::interfaces::IDispatch>,
-    pub in_place_site: Option<IOleInPlaceSite>,
     pub window: Option<win32::HWND>,
     pub url: Option<String>,
     pub scripts: Vec<String>,
@@ -353,6 +352,60 @@ pub struct WebBrowserState {
 }
 
 impl WebBrowserRef {
+    fn activate(&self, unknown: com::interfaces::IUnknown) {
+        let mut state = self.inner.borrow_mut();
+
+        // TODO: Move all this non-sense into the type system
+        assert!(state.unknown.is_none());
+        assert!(state.window.is_none());
+        assert!(state.event_sender.is_some());
+        assert!(state.browser.is_none());
+
+        // TODO: Is this the correct way to get the window we should parent to?
+        let parent = {
+            let mut res = win32::HWND::default();
+            let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
+
+            unsafe {
+                in_place_site.GetWindow(&mut res);
+            }
+
+            res
+        };
+
+        let window = window::create(parent, self);
+
+        unsafe {
+            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_SHOWNOACTIVATE);
+        }
+
+        // We get the result of this asynchronously through the event queue.
+        crate::cef::create(window, state.event_sender.take().unwrap());
+
+        state.unknown = Some(unknown);
+        state.window = Some(window);
+    }
+
+    fn deactivate(&self) {
+        let mut state = self.inner.borrow_mut();
+
+        // TODO: Move all this non-sense into the type system
+        // We don't test against the browser Option here because it might have not been sent from the CrMain thread yet.
+        assert!(state.unknown.is_some());
+        assert!(state.window.is_some());
+        assert!(state.event_sender.is_none());
+
+        // Destroy the old stuff
+        state.unknown.take();
+        state.window.take();
+        state.browser.take();
+
+        // Set up new event queue (so we don't end up processing stale events)
+        let (event_sender, event_receiver) = event_queue::channel();
+        state.event_sender = Some(event_sender);
+        state.event_receiver = event_receiver;
+    }
+
     fn on_size_invalidated(&self) {
         // SetWindowPos can be re-entrant
         let (width, height, window, browser) = {
@@ -565,32 +618,6 @@ impl WebBrowserRef {
         }
     }
 
-    fn activate(&self, unknown: com::interfaces::IUnknown) {
-        let mut state = self.inner.borrow_mut();
-        state.unknown = Some(unknown);
-        let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
-        let mut parent = win32::HWND::default();
-
-        unsafe {
-            in_place_site.GetWindow(&mut parent);
-        }
-
-        let window = window::create(parent, self);
-
-        unsafe {
-            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_SHOWNOACTIVATE);
-        }
-
-        let event_sender = state.event_sender.take().unwrap();
-
-        std::mem::drop(state);
-        crate::cef::create(window, event_sender);
-        let mut state = self.inner.borrow_mut();
-
-        state.in_place_site = Some(in_place_site);
-        state.window = Some(window);
-    }
-
     pub fn browser_created(&self, browser: cef::CefBrowser) {
         {
             let mut state = self.inner.borrow_mut();
@@ -634,7 +661,6 @@ impl Default for WebBrowserState {
             document: None,
             client_site: None,
             client_sink: None,
-            in_place_site: None,
             window: None,
             url: None,
             scripts: vec![],
@@ -736,13 +762,22 @@ com::class! {
         fn QuickActivate(&self, container: *const structs::QAContainer, control: *mut structs::QAControl) -> com::sys::HRESULT {
             // TODO: This is barely implemented. Most stuff in container is ignored and control is not populated _at all_.
             let mut state = self.state();
-            state.client_site = unsafe {
-                Some(std::mem::transmute((*container).client_site))
+
+            let client_site: IOleClientSite = unsafe {
+                std::mem::transmute((*container).client_site)
             };
 
             let sink: com::interfaces::IUnknown = unsafe {
                 std::mem::transmute((*container).event_sink)
             };
+
+            // TODO: Automate this
+            unsafe {
+                client_site.AddRef();
+                sink.AddRef();
+            }
+
+            state.client_site = Some(client_site);
 
             // Apparently the sink doesn't expose the interface that it expects us to later call.
             // Weird, but keep this here in case it shows up at some point and just fetch IDispatch instead.
@@ -795,8 +830,16 @@ com::class! {
     }
 
     impl IOleObject for WebBrowser {
-        fn SetClientSite(&self, _site: IOleClientSite) -> com::sys::HRESULT {
-            unimplemented!()
+        fn SetClientSite(&self, site: Option<IOleClientSite>) -> com::sys::HRESULT {
+            // Only known code path for this is during destruction
+            assert!(site.is_none());
+
+            // Dropping the client site can be re-entrant
+            let _client_site = {
+                self.state().client_site.take()
+            };
+
+            com::sys::S_OK
         }
         fn GetClientSite(&self, _site: IOleClientSite) -> com::sys::HRESULT {
             unimplemented!()
@@ -805,7 +848,9 @@ com::class! {
             unimplemented!()
         }
         fn Close(&self, _dwSaveOption: u32) -> com::sys::HRESULT {
-            unimplemented!()
+            // We don't need to do anything on close because our clean-up is done in deactivate
+            // TODO: It'd be nice to have the expected behaviour instead, but for BYOND it doesn't really matter.
+            com::sys::S_OK
         }
         fn SetMoniker(&self, _dwWhichMoniker: u32, _pmk: u32) -> com::sys::HRESULT {
             unimplemented!()
@@ -932,7 +977,7 @@ com::class! {
             unimplemented!()
         }
         fn OnAmbientPropertyChange(&self, _dispID: u32) -> com::sys::HRESULT {
-            unimplemented!()
+            com::sys::S_OK
         }
         fn FreezeEvents(&self, _bFreeze: bool) -> com::sys::HRESULT {
             com::sys::S_OK
@@ -963,7 +1008,8 @@ com::class! {
 
     impl IOleInPlaceObject for WebBrowser {
         fn InPlaceDeactivate(&self) -> com::sys::HRESULT {
-            unimplemented!()
+            self.state_ref.deactivate();
+            com::sys::S_OK
         }
         fn UIDeactive(&self) -> com::sys::HRESULT {
             unimplemented!()
