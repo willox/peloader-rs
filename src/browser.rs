@@ -462,7 +462,7 @@ impl WebBrowserRef {
                         0,
                         width,
                         height,
-                        win32::SetWindowPos_uFlags::SWP_NOZORDER
+                        win32::SetWindowPos_uFlags::from(win32::SetWindowPos_uFlags::SWP_NOZORDER.0 | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0),
                     ),
                     false
                 );

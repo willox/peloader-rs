@@ -26,7 +26,7 @@ impl Task for PosInvalidated {
                     0,
                     self.w,
                     self.h,
-                    win32::SetWindowPos_uFlags::SWP_NOZORDER
+                    win32::SetWindowPos_uFlags::from(win32::SetWindowPos_uFlags::SWP_NOZORDER.0 | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0)
                 ),
                 false
             );
@@ -65,9 +65,17 @@ impl App for MyApp {
     }
 }
 
+struct MyFocusHandler;
+impl FocusHandler for MyFocusHandler {
+    fn on_set_focus(&mut self, browser: CefBrowser, source: CefFocusSource) -> bool {
+        source == CefFocusSource::NAVIGATION
+    }
+}
+
 struct MyClient {
     life_span_handler: CefLifeSpanHandler,
     request_handler: CefRequestHandler,
+    focus_handler: CefFocusHandler,
     state: Arc<Mutex<State>>,
 }
 
@@ -78,6 +86,10 @@ impl Client for MyClient {
 
     fn get_request_handler(&mut self) -> Option<CefRequestHandler> {
         Some(self.request_handler.clone())
+    }
+
+    fn get_focus_handler(&mut self) -> Option<CefFocusHandler> {
+        Some(self.focus_handler.clone())
     }
 
     fn on_process_message_received(
@@ -294,6 +306,7 @@ pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue
             state: state.clone(),
         }
         .into(),
+        focus_handler: MyFocusHandler.into(),
         state,
     });
 
