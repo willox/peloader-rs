@@ -365,7 +365,6 @@ pub struct WebBrowserState {
     pub unknown: Option<com::interfaces::IUnknown>,
     pub width: i32,
     pub height: i32,
-    pub visible: bool,
     pub silent: bool,
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
@@ -439,7 +438,7 @@ impl WebBrowserRef {
         state.event_receiver = event_receiver;
     }
 
-    fn on_size_invalidated(&self) {
+    fn on_pos_invalidated(&self) {
         // SetWindowPos can be re-entrant
         let (width, height, window, browser) = {
             let state = self.inner.borrow_mut();
@@ -471,7 +470,7 @@ impl WebBrowserRef {
         }
 
         if let Some(browser) = browser {
-            let task = ::cef::CefTask::new(crate::cef::Resizer {
+            let task = ::cef::CefTask::new(crate::cef::PosInvalidated {
                 browser: browser.to_owned(),
                 w: width,
                 h: height,
@@ -665,7 +664,7 @@ impl WebBrowserRef {
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
                 );
-                println!("Invoke ret: {}", x);
+                println!("Invoke {} ret: {}", url, x);
             }
         }
     }
@@ -695,7 +694,7 @@ impl WebBrowserRef {
         }
 
         // TODO: This is not in main thread!
-        self.on_size_invalidated();
+        self.on_pos_invalidated();
     }
 }
 
@@ -712,7 +711,6 @@ impl Default for WebBrowserState {
             unknown: None,
             width: 0,
             height: 0,
-            visible: false,
             silent: false,
             document: None,
             client_site: None,
@@ -939,7 +937,7 @@ com::class! {
                     }
 
                     self.state_ref.activate(unk);
-                    self.state_ref.on_size_invalidated();
+                    self.state_ref.on_pos_invalidated();
                     com::sys::S_OK
                 }
 
@@ -986,7 +984,7 @@ com::class! {
                 state.height = h;
             }
 
-            self.state_ref.on_size_invalidated();
+            self.state_ref.on_pos_invalidated();
             com::sys::S_OK
         }
         fn GetExtent(&self, aspect: structs::DataViewAspect, size: *mut structs::Size) -> com::sys::HRESULT {
@@ -1012,7 +1010,8 @@ com::class! {
             unimplemented!()
         }
         fn GetMiscStatus(&self, _dwAspect: u32, pdwStatus: *mut u32) -> com::sys::HRESULT {
-            // TODO: What are we returning here?
+            // TODO: Lazy
+            // OLEMISC_RECOMPOSEONRESIZE
             unsafe {
                 *pdwStatus = 1;
             }
@@ -1208,15 +1207,14 @@ com::class! {
             unimplemented!()
         }
         fn get_Visible(&self, out: *mut structs::VariantBool) -> com::sys::HRESULT {
-            let state = self.state();
             unsafe {
-                *out = state.visible.into();
+                *out = structs::VariantBool::True;
             }
             com::sys::S_OK
         }
         fn set_Visible(&self, vis: structs::VariantBool) -> com::sys::HRESULT {
-            let mut state = self.state();
-            state.visible = vis.into();
+            let vis: bool = vis.into();
+            assert_eq!(vis, true);
             com::sys::S_OK
         }
         fn get_StatusBar(&self) -> com::sys::HRESULT {

@@ -4,10 +4,34 @@ use crate::browser::event_queue;
 use crate::win32;
 use cef::*;
 
-pub struct Resizer {
+pub struct PosInvalidated {
     pub browser: CefBrowser,
     pub w: i32,
     pub h: i32,
+}
+
+impl Task for PosInvalidated {
+    fn execute(&mut self) {
+        let host = self.browser.get_host().unwrap();
+        host.notify_move_or_resize_started();
+
+        let window = host.get_window_handle();
+
+        unsafe {
+            assert_ne!(
+                win32::SetWindowPos(
+                    std::mem::transmute::<_, win32::HWND>(window),
+                    win32::HWND::default(),
+                    0,
+                    0,
+                    self.w,
+                    self.h,
+                    win32::SetWindowPos_uFlags::SWP_NOZORDER
+                ),
+                false
+            );
+        }
+    }
 }
 
 struct State {
@@ -30,30 +54,6 @@ impl State {
                     win32::LPARAM::default(),
                 );
             }
-        }
-    }
-}
-
-impl Task for Resizer {
-    fn execute(&mut self) {
-        let host = self.browser.get_host().unwrap();
-        host.notify_move_or_resize_started();
-
-        let window = host.get_window_handle();
-
-        unsafe {
-            assert_ne!(
-                win32::SetWindowPos(
-                    std::mem::transmute::<_, win32::HWND>(window),
-                    win32::HWND::default(),
-                    0,
-                    0,
-                    self.w,
-                    self.h,
-                    win32::SetWindowPos_uFlags::SWP_NOZORDER
-                ),
-                false
-            );
         }
     }
 }

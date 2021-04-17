@@ -20,6 +20,7 @@ fn main() {
             GetWindowLongA,
             WM_PAINT,
             WM_SIZE,
+            WM_MOVE,
             WM_NCCALCSIZE,
         },
         Windows::Win32::Gdi::{
