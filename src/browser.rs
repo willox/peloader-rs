@@ -370,7 +370,7 @@ pub struct WebBrowserState {
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
     pub client_sink: Option<com::interfaces::IDispatch>,
-    pub window: Option<win32::HWND>,
+    pub window: Arc<Mutex<Option<win32::HWND>>>,
     pub url: Option<String>,
     pub scripts: Vec<String>,
     pub browser: Option<cef::CefBrowser>,
@@ -385,7 +385,7 @@ impl WebBrowserRef {
 
         // TODO: Move all this non-sense into the type system
         assert!(state.unknown.is_none());
-        assert!(state.window.is_none());
+        assert!(state.window.lock().unwrap().is_none());
         assert!(state.event_sender.is_some());
         assert!(state.browser.is_none());
 
@@ -408,15 +408,15 @@ impl WebBrowserRef {
 
         let window = window::create(parent, self);
 
+        state.unknown = Some(unknown);
+        *state.window.lock().unwrap() = Some(window);
+
         unsafe {
             win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_SHOWNOACTIVATE);
         }
 
         // We get the result of this asynchronously through the event queue.
-        crate::cef::create(window, state.event_sender.take().unwrap());
-
-        state.unknown = Some(unknown);
-        state.window = Some(window);
+        crate::cef::create(Arc::clone(&state.window), state.event_sender.take().unwrap());
     }
 
     fn deactivate(&self) {
@@ -425,12 +425,12 @@ impl WebBrowserRef {
         // TODO: Move all this non-sense into the type system
         // We don't test against the browser Option here because it might have not been sent from the CrMain thread yet.
         assert!(state.unknown.is_some());
-        assert!(state.window.is_some());
+        assert!(state.window.lock().unwrap().is_some());
         assert!(state.event_sender.is_none());
 
         // Destroy the old stuff
         state.unknown.take();
-        state.window.take();
+        state.window.lock().unwrap().take();
         state.browser.take();
 
         // Set up new event queue (so we don't end up processing stale events)
@@ -443,10 +443,12 @@ impl WebBrowserRef {
         // SetWindowPos can be re-entrant
         let (width, height, window, browser) = {
             let state = self.inner.borrow_mut();
+            let hwnd = state.window.lock().unwrap().clone();
+
             (
                 state.width,
                 state.height,
-                state.window.clone(),
+                hwnd,
                 state.browser.clone(),
             )
         };
@@ -715,7 +717,7 @@ impl Default for WebBrowserState {
             document: None,
             client_site: None,
             client_sink: None,
-            window: None,
+            window: Arc::new(Mutex::new(None)),
             url: None,
             scripts: vec![],
             browser: None,
@@ -1048,9 +1050,12 @@ com::class! {
     impl IOleWindow for WebBrowser {
         fn GetWindow(&self, phwnd: *mut win32::HWND) -> com::sys::HRESULT {
             let state = self.state();
+
+            let hwnd = state.window.lock().unwrap().unwrap();
             unsafe {
-                *phwnd = state.window.unwrap();
+                *phwnd = hwnd;
             }
+
             com::sys::S_OK
         }
         fn ContextSensitiveHelp(&self, _fEnterMode: bool) -> com::sys::HRESULT {

@@ -11,7 +11,7 @@ pub struct Resizer {
 }
 
 struct State {
-    parent: win32::HWND,
+    parent: Arc<Mutex<Option<win32::HWND>>>,
     event_sender: event_queue::Sender,
 }
 
@@ -21,13 +21,15 @@ impl State {
         let _ = self.event_sender.send(event);
 
         // TODO: Window might have been destroyed
-        unsafe {
-            win32::SendNotifyMessageA(
-                self.parent,
-                0x0400,
-                win32::WPARAM::default(),
-                win32::LPARAM::default(),
-            );
+        if let Some(parent) = *self.parent.lock().unwrap() {
+            unsafe {
+                win32::SendNotifyMessageA(
+                    parent,
+                    0x0400,
+                    win32::WPARAM::default(),
+                    win32::LPARAM::default(),
+                );
+            }
         }
     }
 }
@@ -263,7 +265,9 @@ pub fn init() -> bool {
     false
 }
 
-pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
+pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue::Sender) {
+    let hwnd = parent.lock().unwrap().unwrap().clone();
+
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0) // | win32::WINDOW_STYLE::WS_DLGFRAME.0)
@@ -272,7 +276,7 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
             .set_width(512)
             .set_height(512)
             .set_window_name("hello, world!")
-            .set_parent_window(std::mem::transmute(parent))
+            .set_parent_window(std::mem::transmute(hwnd))
             .build()
     };
 
