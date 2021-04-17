@@ -927,8 +927,6 @@ com::class! {
                 }
 
                 constants::OLEIVERB_INPLACEACTIVATE => {
-                    println!("InPlaceActivate");
-
                     let unk: com::interfaces::IUnknown = unsafe {
                         std::mem::transmute(self)
                     };

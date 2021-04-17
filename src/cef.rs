@@ -283,6 +283,7 @@ pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0) // | win32::WINDOW_STYLE::WS_DLGFRAME.0)
+            .set_ex_style(win32::WINDOW_EX_STYLE::WS_EX_NOACTIVATE.0)
             .set_x(-1)
             .set_y(-1)
             .set_width(512)
@@ -315,7 +316,7 @@ pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue
     assert!(CefBrowserHost::create_browser(
         &window_info,
         Some(client.clone()),
-        Some(&cef::CefString::new("https://html5test.com/")),
+        None,
         &browser_settings,
         None,
         None,
