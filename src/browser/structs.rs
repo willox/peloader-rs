@@ -111,13 +111,3 @@ pub struct DispParams {
     pub arg_count: u32,
     pub named_arg_count: u32,
 }
-
-#[repr(C)]
-pub struct SafeArray {
-    pub dimensions: u16,
-    pub features: u16,
-    pub elements: u32,
-    pub locks: u32,
-    pub bound_elements: u32,
-    pub bound_bounds: i32,
-}

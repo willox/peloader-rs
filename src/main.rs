@@ -5,7 +5,7 @@ mod cef;
 mod win32;
 
 use std::{ffi::c_void, os::raw::c_char, path::Path};
-use pelite::{ImageMap, Result};
+use pelite::{ImageMap};
 use pelite::pe32::{Pe, PeView};
 use region::Protection;
 use detour::RawDetour;
@@ -57,7 +57,7 @@ fn main() {
         return;
     }
 
-    std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin");
+    std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
 
     let scanner = sigscan::Scanner::for_module("ntdll.dll").unwrap();
 
@@ -131,7 +131,7 @@ fn main() {
             let int = int.unwrap();
 
             let func = match int {
-                pelite::pe32::imports::Import::ByName { hint, name } => {
+                pelite::pe32::imports::Import::ByName { hint: _hint, name } => {
                     unsafe {
                         win32::GetProcAddress(dll_handle, name.to_string()).unwrap()
                     }

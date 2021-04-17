@@ -1,5 +1,5 @@
 use com::interfaces::IDispatch;
-use std::{cell::RefCell, convert::TryInto, rc::Rc};
+use std::{convert::TryInto};
 
 com::interfaces! {
     #[uuid("00000000-0000-0000-A731-00A0C9082637")]
@@ -17,6 +17,7 @@ pub struct VariantHack {
     pub string: com::BString,
 }
 
+// TODO: This is way too bare-bones
 com::class! {
     pub class Script : IScript(IDispatch) {
         state_ref: crate::browser::WebBrowserRef,
@@ -29,7 +30,7 @@ com::class! {
         pub fn GetTypeInfo(&self) {
             unimplemented!()
         }
-        pub fn GetIDsOfNames(&self, id: *const com::sys::IID, names: *const *const u16, count: u32, lcid: u32, out: *mut u32) -> com::sys::HRESULT {
+        pub fn GetIDsOfNames(&self, _id: *const com::sys::IID, _names: *const *const u16, _count: u32, _lcid: u32, out: *mut u32) -> com::sys::HRESULT {
             unsafe {
                 *out = 1;
             }
@@ -37,14 +38,14 @@ com::class! {
         }
         pub fn Invoke(
             &self,
-            disp_id: u32,
-            riid: *const com::sys::IID,
-            lcid: u32,
-            flags: u16,
+            _disp_id: u32,
+            _riid: *const com::sys::IID,
+            _lcid: u32,
+            _flags: u16,
             params: *const u32,
-            result: *mut u32,
-            excep_info: *mut u32,
-            arg_err: *mut u32,
+            _result: *mut u32,
+            _excep_info: *mut u32,
+            _arg_err: *mut u32,
         ) -> com::sys::HRESULT {
             let mut state = self.state_ref.inner.borrow_mut();
 

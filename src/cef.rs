@@ -39,16 +39,6 @@ impl Task for Resizer {
 
 pub struct MyApp;
 impl App for MyApp {
-    fn on_before_command_line_processing(
-        &mut self,
-        process_type: Option<&CefString>,
-        command_line: CefCommandLine,
-    ) {
-        let mut command_line = command_line;
-        println!("on_before_command_line_processing {:?}", process_type);
-        println!("{}", command_line.get_program());
-    }
-
     fn get_render_process_handler(&mut self) -> Option<CefRenderProcessHandler> {
         Some(CefRenderProcessHandler::new(MyRenderProcessHandler))
     }
@@ -84,7 +74,7 @@ struct MyRequestHandler {
     state: Arc<Mutex<State>>,
 }
 impl RequestHandler for MyRequestHandler {
-    fn on_before_browse(&mut self, browser: CefBrowser, frame: CefFrame, request: CefRequest, user_gesture: bool, is_redirect: bool) -> bool {
+    fn on_before_browse(&mut self, _browser: CefBrowser, _frame: CefFrame, request: CefRequest, _user_gesture: bool, _is_redirect: bool) -> bool {
         let mut parts = CefURLParts::default();
 
         let url = request.get_url().to_string();
@@ -120,7 +110,7 @@ impl LifeSpanHandler for MyLifeSpanHandler {
 
 struct MyV8Handler;
 impl V8Handler for MyV8Handler {
-    fn execute(&mut self, name: &CefString, object: CefV8Value, arguments: &[CefV8Value], retval: &mut Option<CefV8Value>, exception: &mut CefString) ->bool {
+    fn execute(&mut self, name: &CefString, _object: CefV8Value, arguments: &[CefV8Value], retval: &mut Option<CefV8Value>, exception: &mut CefString) ->bool {
         if name.to_string() != "cef_to_byond" {
             *exception = CefString::new("unknown function in MyV8Handler");
             return true;
@@ -245,8 +235,4 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
         None,
         None,
     ));
-}
-
-pub fn shutdown() {
-    cef_shutdown();
 }

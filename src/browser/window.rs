@@ -6,8 +6,7 @@ extern "system" fn window_proc(
     w_param: win32::WPARAM,
     l_param: win32::LPARAM
 ) -> win32::LRESULT {
-    let mut ps = win32::PAINTSTRUCT::default();
-
+    // TODO: lazy
     if message == 0x0400 {
         let state_ref: &crate::browser::WebBrowserRef = unsafe {
             let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default()) as *const crate::browser::WebBrowserRef;
