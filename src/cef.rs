@@ -121,7 +121,7 @@ impl RequestHandler for MyRequestHandler {
             return true;
         }
 
-        let scheme = parts.scheme();
+        let scheme = parts.scheme().to_ascii_lowercase();
 
         if scheme == "byond" {
             println!("UrlNavigate: {}", url);
@@ -132,9 +132,10 @@ impl RequestHandler for MyRequestHandler {
             return true;
         }
 
-        if scheme != "http" && scheme != "https" {
-            return true;
-        }
+        // BYOND relies on loading local files when using browse(null, ...)
+        // if scheme != "http" && scheme != "https" {
+        //     return true;
+        // }
 
         false
     }
