@@ -67,7 +67,7 @@ impl App for MyApp {
 
 struct MyFocusHandler;
 impl FocusHandler for MyFocusHandler {
-    fn on_set_focus(&mut self, browser: CefBrowser, source: CefFocusSource) -> bool {
+    fn on_set_focus(&mut self, _browser: CefBrowser, source: CefFocusSource) -> bool {
         source == CefFocusSource::NAVIGATION
     }
 }
