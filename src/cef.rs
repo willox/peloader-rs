@@ -175,6 +175,7 @@ impl RenderProcessHandler for MyRenderProcessHandler {
 
 static mut INIT: bool = false;
 
+// Returns true if we are a sub-process
 pub fn init() -> bool {
     unsafe {
         if INIT {
