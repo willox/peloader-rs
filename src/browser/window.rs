@@ -4,21 +4,20 @@ extern "system" fn window_proc(
     hwnd: win32::HWND,
     message: u32,
     w_param: win32::WPARAM,
-    l_param: win32::LPARAM
+    l_param: win32::LPARAM,
 ) -> win32::LRESULT {
     // TODO: lazy
     if message == 0x0400 {
         let state_ref: &crate::browser::WebBrowserRef = unsafe {
-            let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default()) as *const crate::browser::WebBrowserRef;
+            let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default())
+                as *const crate::browser::WebBrowserRef;
             std::mem::transmute(ptr)
         };
 
         state_ref.process_events();
     }
 
-    unsafe {
-        win32::DefWindowProcA(hwnd, message, w_param, l_param)
-    }
+    unsafe { win32::DefWindowProcA(hwnd, message, w_param, l_param) }
 }
 
 pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) -> win32::HWND {
@@ -35,7 +34,7 @@ pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) ->
             parent,
             win32::HMENU::default(),
             win32::HINSTANCE::default(),
-            std::ptr::null_mut()
+            std::ptr::null_mut(),
         );
 
         let ptr: *const _ = state_ref;

@@ -1,14 +1,21 @@
 mod constants;
 mod document;
+pub mod event_queue;
 mod script;
 mod structs;
 mod window;
-pub mod event_queue;
 
-use std::{convert::TryInto, rc::Rc, sync::{Arc, Mutex}};
-use std::{cell::{RefCell, RefMut}, ffi::c_void};
 use com::production::ClassAllocation;
 use detour::RawDetour;
+use std::{
+    cell::{RefCell, RefMut},
+    ffi::c_void,
+};
+use std::{
+    convert::TryInto,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use crate::win32;
 
@@ -16,9 +23,15 @@ use crate::win32;
 #[derive(PartialEq)]
 struct CLSID(u32, u16, u16, u16, [u8; 6]);
 
-static CLSID_NULL: CLSID = CLSID(0, 0, 0, 0, [0;6]);
+static CLSID_NULL: CLSID = CLSID(0, 0, 0, 0, [0; 6]);
 
-static CLSID_WEB_BROWSER: CLSID = CLSID(0x8856F961, 0x340A, 0x11D0, 0x6BA9, [0x00, 0xC0, 0x4F, 0xD7, 0x05, 0xA2]);
+static CLSID_WEB_BROWSER: CLSID = CLSID(
+    0x8856F961,
+    0x340A,
+    0x11D0,
+    0x6BA9,
+    [0x00, 0xC0, 0x4F, 0xD7, 0x05, 0xA2],
+);
 
 pub fn init() {
     com::runtime::init_runtime().unwrap();
@@ -30,16 +43,31 @@ pub fn init() {
     };
 
     unsafe {
-        let detour = RawDetour::new(co_get_class_object as _, co_get_class_object_hook as _).unwrap();
+        let detour =
+            RawDetour::new(co_get_class_object as _, co_get_class_object_hook as _).unwrap();
         detour.enable().unwrap();
         CO_GET_CLASS_OBJECT = std::mem::transmute(detour.trampoline());
         std::mem::forget(detour);
     }
 }
 
-static mut CO_GET_CLASS_OBJECT: Option<extern "stdcall" fn(clsid: *const CLSID, b: u32, c: u32, riid: *const CLSID, e: *mut *const c_void) -> u32> = None;
+static mut CO_GET_CLASS_OBJECT: Option<
+    extern "stdcall" fn(
+        clsid: *const CLSID,
+        b: u32,
+        c: u32,
+        riid: *const CLSID,
+        e: *mut *const c_void,
+    ) -> u32,
+> = None;
 
-unsafe extern "stdcall" fn co_get_class_object_hook(clsid: *const CLSID, b: u32, c: u32, riid: *const CLSID, e: *mut *const c_void) -> u32 {
+unsafe extern "stdcall" fn co_get_class_object_hook(
+    clsid: *const CLSID,
+    b: u32,
+    c: u32,
+    riid: *const CLSID,
+    e: *mut *const c_void,
+) -> u32 {
     // TODO: Move to another hook somewhere in byond?
     // We do our late initialization here because doing it before BYOND has loaded makes MFC sad somehow.
     // Could be investigated but it's no big deal.
@@ -364,7 +392,12 @@ impl WebBrowserRef {
         // TODO: Is this the correct way to get the window we should parent to?
         let parent = {
             let mut res = win32::HWND::default();
-            let in_place_site: IOleInPlaceSite = state.client_site.as_ref().unwrap().query_interface().unwrap();
+            let in_place_site: IOleInPlaceSite = state
+                .client_site
+                .as_ref()
+                .unwrap()
+                .query_interface()
+                .unwrap();
 
             unsafe {
                 in_place_site.GetWindow(&mut res);
@@ -414,13 +447,24 @@ impl WebBrowserRef {
                 state.width,
                 state.height,
                 state.window.clone(),
-                state.browser.clone()
+                state.browser.clone(),
             )
         };
 
         if let Some(window) = window {
             unsafe {
-                assert_ne!(win32::SetWindowPos(window, win32::HWND::default(), 0, 0, width, height, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
+                assert_ne!(
+                    win32::SetWindowPos(
+                        window,
+                        win32::HWND::default(),
+                        0,
+                        0,
+                        width,
+                        height,
+                        win32::SetWindowPos_uFlags::SWP_NOZORDER
+                    ),
+                    false
+                );
             }
         }
 
@@ -466,17 +510,11 @@ impl WebBrowserRef {
             state.client_sink.clone()
         };
 
-        let var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(12u16 | 0x4000u16)
-        };
+        let var_type: com::TypeDescVarType = unsafe { std::mem::transmute(12u16 | 0x4000u16) };
 
-        let bool_var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(11u16 | 0x4000u16)
-        };
+        let bool_var_type: com::TypeDescVarType = unsafe { std::mem::transmute(11u16 | 0x4000u16) };
 
-        let array_var_type: com::TypeDescVarType = unsafe {
-            std::mem::transmute(8192u16 | 17u16)
-        };
+        let array_var_type: com::TypeDescVarType = unsafe { std::mem::transmute(8192u16 | 17u16) };
 
         let str1 = com::BString::from(url.as_str());
         let str2 = com::BString::from(url.as_str());
@@ -531,8 +569,12 @@ impl WebBrowserRef {
             _4: 0,
         };
 
-        unsafe { unk.AddRef(); }
-        unsafe { unk.AddRef(); }
+        unsafe {
+            unk.AddRef();
+        }
+        unsafe {
+            unk.AddRef();
+        }
 
         let args: [structs::Variant; 7] = [
             structs::Variant {
@@ -607,12 +649,20 @@ impl WebBrowserRef {
             named_args: std::ptr::null(),
             arg_count: 7,
             named_arg_count: 0,
-
         };
 
         if let Some(sink) = &sink {
             unsafe {
-                let x = sink.Invoke(250, (&CLSID_NULL) as *const _ as *const com::sys::IID, 0, 1, &disp_params as *const _ as *const u32, &mut result as *mut _ as *mut u32, std::ptr::null_mut(), std::ptr::null_mut());
+                let x = sink.Invoke(
+                    250,
+                    (&CLSID_NULL) as *const _ as *const com::sys::IID,
+                    0,
+                    1,
+                    &disp_params as *const _ as *const u32,
+                    &mut result as *mut _ as *mut u32,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
                 println!("Invoke ret: {}", x);
             }
         }
@@ -632,7 +682,11 @@ impl WebBrowserRef {
             }
 
             for code in &state.scripts {
-                frame.execute_java_script(&cef::CefString::new(code), Some(&cef::CefString::new("_byond.js")), 0);
+                frame.execute_java_script(
+                    &cef::CefString::new(code),
+                    Some(&cef::CefString::new("_byond.js")),
+                    0,
+                );
             }
 
             state.browser = Some(browser);
@@ -686,9 +740,7 @@ impl Default for WebBrowserRef {
             }));
         }
 
-        Self {
-            inner: rc,
-        }
+        Self { inner: rc }
     }
 }
 

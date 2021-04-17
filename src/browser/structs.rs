@@ -1,6 +1,5 @@
 use std::ffi::c_void;
 
-
 // Move to types?
 pub type VerbId = i32;
 
@@ -33,7 +32,6 @@ unsafe impl com::AbiTransferable for DataViewAspect {
     }
 }
 
-
 #[repr(u16)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum VariantBool {
@@ -55,7 +53,7 @@ impl From<VariantBool> for bool {
         match var as u16 {
             0xFFFF => true,
             0x0000 => false,
-            _ => panic!("unknown value of VariantBool encounterd")
+            _ => panic!("unknown value of VariantBool encounterd"),
         }
     }
 }
@@ -92,7 +90,6 @@ pub struct QAControl {
     pub prop_notify_cookie: u32,
     pub pointer_activation_policy: u32,
 }
-
 
 #[repr(C)]
 pub struct Variant {

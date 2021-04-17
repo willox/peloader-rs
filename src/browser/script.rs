@@ -1,5 +1,5 @@
 use com::interfaces::IDispatch;
-use std::{convert::TryInto};
+use std::convert::TryInto;
 
 com::interfaces! {
     #[uuid("00000000-0000-0000-A731-00A0C9082637")]
@@ -72,4 +72,3 @@ com::class! {
         }
     }
 }
-

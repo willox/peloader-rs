@@ -1,5 +1,5 @@
-use com::sys::HRESULT;
 use super::structs::VerbId;
+use com::sys::HRESULT;
 
 pub const OLEIVERB_SHOW: VerbId = -1;
 pub const OLEIVERB_OPEN: VerbId = -2;

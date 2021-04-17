@@ -1,6 +1,5 @@
 /// All communication from the CrMain thread to BYOND's main thread goes through this interface
 /// Note: Communication in the other direction goes through cef_post_task.
-
 use std::sync::mpsc;
 
 pub use mpsc::channel;

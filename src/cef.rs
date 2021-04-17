@@ -1,8 +1,8 @@
-use std::{sync::{Arc, Mutex}};
+use std::sync::{Arc, Mutex};
 
-use cef::*;
-use crate::win32;
 use crate::browser::event_queue;
+use crate::win32;
+use cef::*;
 
 pub struct Resizer {
     pub browser: CefBrowser,
@@ -19,7 +19,12 @@ impl State {
     fn send_event(&self, event: event_queue::Event) {
         self.event_sender.send(event).unwrap();
         unsafe {
-            win32::SendNotifyMessageA(self.parent, 0x0400, win32::WPARAM::default(), win32::LPARAM::default());
+            win32::SendNotifyMessageA(
+                self.parent,
+                0x0400,
+                win32::WPARAM::default(),
+                win32::LPARAM::default(),
+            );
         }
     }
 }
@@ -32,7 +37,18 @@ impl Task for Resizer {
         let window = host.get_window_handle();
 
         unsafe {
-            assert_ne!(win32::SetWindowPos(std::mem::transmute::<_, win32::HWND>(window), win32::HWND::default(), 0, 0, self.w, self.h, win32::SetWindowPos_uFlags::SWP_NOZORDER), false);
+            assert_ne!(
+                win32::SetWindowPos(
+                    std::mem::transmute::<_, win32::HWND>(window),
+                    win32::HWND::default(),
+                    0,
+                    0,
+                    self.w,
+                    self.h,
+                    win32::SetWindowPos_uFlags::SWP_NOZORDER
+                ),
+                false
+            );
         }
     }
 }
@@ -59,10 +75,23 @@ impl Client for MyClient {
         Some(self.request_handler.clone())
     }
 
-    fn on_process_message_received(&mut self, _browser: CefBrowser, _frame: CefFrame, _source_process: CefProcessId, message: CefProcessMessage) -> bool {
+    fn on_process_message_received(
+        &mut self,
+        _browser: CefBrowser,
+        _frame: CefFrame,
+        _source_process: CefProcessId,
+        message: CefProcessMessage,
+    ) -> bool {
         if message.get_name().to_string() == "cef_to_byond" {
-            let url = message.get_argument_list().unwrap().get_string(0).to_string();
-            self.state.lock().unwrap().send_event(event_queue::Event::UrlNavigate(url));
+            let url = message
+                .get_argument_list()
+                .unwrap()
+                .get_string(0)
+                .to_string();
+            self.state
+                .lock()
+                .unwrap()
+                .send_event(event_queue::Event::UrlNavigate(url));
             return true;
         }
 
@@ -74,7 +103,14 @@ struct MyRequestHandler {
     state: Arc<Mutex<State>>,
 }
 impl RequestHandler for MyRequestHandler {
-    fn on_before_browse(&mut self, _browser: CefBrowser, _frame: CefFrame, request: CefRequest, _user_gesture: bool, _is_redirect: bool) -> bool {
+    fn on_before_browse(
+        &mut self,
+        _browser: CefBrowser,
+        _frame: CefFrame,
+        request: CefRequest,
+        _user_gesture: bool,
+        _is_redirect: bool,
+    ) -> bool {
         let mut parts = CefURLParts::default();
 
         let url = request.get_url().to_string();
@@ -87,7 +123,10 @@ impl RequestHandler for MyRequestHandler {
 
         if scheme == "byond" {
             println!("UrlNavigate: {}", url);
-            self.state.lock().unwrap().send_event(event_queue::Event::UrlNavigate(url));
+            self.state
+                .lock()
+                .unwrap()
+                .send_event(event_queue::Event::UrlNavigate(url));
             return true;
         }
 
@@ -104,20 +143,31 @@ struct MyLifeSpanHandler {
 }
 impl LifeSpanHandler for MyLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefBrowser) {
-        self.state.lock().unwrap().send_event(event_queue::Event::BrowserCreated(browser));
+        self.state
+            .lock()
+            .unwrap()
+            .send_event(event_queue::Event::BrowserCreated(browser));
     }
 }
 
 struct MyV8Handler;
 impl V8Handler for MyV8Handler {
-    fn execute(&mut self, name: &CefString, _object: CefV8Value, arguments: &[CefV8Value], retval: &mut Option<CefV8Value>, exception: &mut CefString) ->bool {
+    fn execute(
+        &mut self,
+        name: &CefString,
+        _object: CefV8Value,
+        arguments: &[CefV8Value],
+        retval: &mut Option<CefV8Value>,
+        exception: &mut CefString,
+    ) -> bool {
         if name.to_string() != "cef_to_byond" {
             *exception = CefString::new("unknown function in MyV8Handler");
             return true;
         }
 
         if arguments.len() != 1 {
-            *exception = CefString::new("incorrect number of arguments encountered in cef_to_byond");
+            *exception =
+                CefString::new("incorrect number of arguments encountered in cef_to_byond");
             return true;
         }
 
@@ -141,7 +191,8 @@ impl V8Handler for MyV8Handler {
             }
 
             None => {
-                *exception = CefString::new("cef_to_byond called outside of a frame (in a web worker?)");
+                *exception =
+                    CefString::new("cef_to_byond called outside of a frame (in a web worker?)");
                 true
             }
         }
@@ -158,8 +209,13 @@ impl RenderProcessHandler for MyRenderProcessHandler {
     ) -> () {
         let globals = context.get_global().unwrap();
 
-        let value = CefV8Value::create_function(&CefString::new("cef_to_byond"), MyV8Handler).unwrap();
-        globals.set_value_bykey(Some(&CefString::new("cef_to_byond")), value, CefV8Propertyattribute::READONLY);
+        let value =
+            CefV8Value::create_function(&CefString::new("cef_to_byond"), MyV8Handler).unwrap();
+        globals.set_value_bykey(
+            Some(&CefString::new("cef_to_byond")),
+            value,
+            CefV8Propertyattribute::READONLY,
+        );
     }
 }
 
@@ -174,7 +230,8 @@ pub fn init() -> bool {
 
         INIT = true;
     }
-    let main_args = unsafe { CefMainArgs::new(win32::GetModuleHandleA(win32::PSTR::default()) as _) };
+    let main_args =
+        unsafe { CefMainArgs::new(win32::GetModuleHandleA(win32::PSTR::default()) as _) };
 
     let app = ::cef::CefApp::new(crate::cef::MyApp);
 
@@ -188,7 +245,12 @@ pub fn init() -> bool {
         .set_multi_threaded_message_loop(1)
         .set_remote_debugging_port(1339)
         .build();
-    assert!(cef_initialize(&main_args, &settings, Some(app.clone()), None));
+    assert!(cef_initialize(
+        &main_args,
+        &settings,
+        Some(app.clone()),
+        None
+    ));
 
     std::mem::forget(main_args);
     std::mem::forget(settings);
@@ -200,7 +262,7 @@ pub fn init() -> bool {
 pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
     let window_info = unsafe {
         CefWindowInfo::default()
-            .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0)// | win32::WINDOW_STYLE::WS_DLGFRAME.0)
+            .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0) // | win32::WINDOW_STYLE::WS_DLGFRAME.0)
             .set_x(-1)
             .set_y(-1)
             .set_width(512)
@@ -218,10 +280,12 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender) {
     let client = CefClient::new(MyClient {
         life_span_handler: MyLifeSpanHandler {
             state: state.clone(),
-        }.into(),
+        }
+        .into(),
         request_handler: MyRequestHandler {
             state: state.clone(),
-        }.into(),
+        }
+        .into(),
         state,
     });
 
