@@ -20,7 +20,7 @@ impl State {
         // It's ok if the receiver has been destroyed - it just means we are about to be destroyed too!
         let _ = self.event_sender.send(event);
 
-        // TODO: Window might have been destroyed
+        // Same deal if the parent window has been destroyed.
         if let Some(parent) = *self.parent.lock().unwrap() {
             unsafe {
                 win32::SendNotifyMessageA(
