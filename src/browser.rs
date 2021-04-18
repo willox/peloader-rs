@@ -71,7 +71,7 @@ unsafe extern "stdcall" fn co_get_class_object_hook(
     // TODO: Move to another hook somewhere in byond?
     // We do our late initialization here because doing it before BYOND has loaded makes MFC sad somehow.
     // Could be investigated but it's no big deal.
-    if crate::cef::init() {
+    if crate::cef::init(true) {
         unreachable!()
     }
 
@@ -87,6 +87,17 @@ unsafe extern "stdcall" fn co_get_class_object_hook(
 }
 
 com::interfaces! {
+    #[uuid("B196B289-BAB4-101A-B69C-00AA00341D07")]
+    pub unsafe interface IOleControlSite : com::interfaces::IUnknown {
+        fn OnControlInfoChanged(&self);
+        fn LockInPlaceActivate(&self);
+        fn GetExtendedControl(&self);
+        fn TransformCoords(&self);
+        fn TranslateAcceelerator(&self);
+        fn SetFocus(&self, focus: bool);
+        fn ShowPropertyFrame(&self);
+    }
+
     #[uuid("34A715A0-6587-11D0-924A-0020AFC7AC4D")]
     pub unsafe interface DWebBrowserEvents2 : $IDispatch {}
 
@@ -369,7 +380,7 @@ pub struct WebBrowserState {
     pub document: Option<ClassAllocation<document::HtmlDocument>>,
     pub client_site: Option<IOleClientSite>,
     pub client_sink: Option<com::interfaces::IDispatch>,
-    pub window: Arc<Mutex<Option<win32::HWND>>>,
+    pub window: Option<win32::HWND>,
     pub url: Option<String>,
     pub scripts: Vec<String>,
     pub browser: Option<cef::CefBrowser>,
@@ -379,12 +390,23 @@ pub struct WebBrowserState {
 }
 
 impl WebBrowserRef {
+    fn ui_activate(&self) {
+        let state = self.inner.borrow_mut();
+
+        println!("UI Activate");
+
+        if let Some(browser) = &state.browser {
+            //browser.get_host().unwrap().set_focus(true);
+            //browser.get_host().unwrap().send_focus_event(true);
+        }
+    }
+
     fn activate(&self, unknown: com::interfaces::IUnknown) {
         let mut state = self.inner.borrow_mut();
 
         // TODO: Move all this non-sense into the type system
         assert!(state.unknown.is_none());
-        assert!(state.window.lock().unwrap().is_none());
+        assert!(state.window.is_none());
         assert!(state.event_sender.is_some());
         assert!(state.browser.is_none());
 
@@ -398,6 +420,8 @@ impl WebBrowserRef {
                 .query_interface()
                 .unwrap();
 
+
+
             unsafe {
                 in_place_site.GetWindow(&mut res);
             }
@@ -405,17 +429,55 @@ impl WebBrowserRef {
             res
         };
 
-        let window = window::create(parent, self);
 
-        state.unknown = Some(unknown);
-        *state.window.lock().unwrap() = Some(window);
+        let event_sender = state.event_sender.take();
 
-        unsafe {
-            win32::ShowWindow(window, win32::SHOW_WINDOW_CMD::SW_SHOWNOACTIVATE);
+        let url = match state.url.take() {
+            Some(url) => url,
+            None => String::from("https://google.com"),
+        };
+
+        std::mem::drop(state);
+
+        //let window = window::create(parent, self);
+        let (browser, window) = crate::cef::create(parent, event_sender.unwrap(), &url);
+
+        {
+            let mut state = self.inner.borrow_mut();
+            state.unknown = Some(unknown);
+            state.window = Some(window);
+            // state.browser = Some(browser);
         }
 
-        // We get the result of this asynchronously through the event queue.
-        crate::cef::create(Arc::clone(&state.window), state.event_sender.take().unwrap());
+        self.browser_created(browser.clone());
+    }
+
+    fn browse(&self, url: &str) {
+        {
+            let (window, event_sender) = {
+                let mut state = self.inner.borrow_mut();
+                (
+                    state.window.clone().unwrap(),
+                    state.event_sender.take()
+                )
+            };
+
+            // We get the result of this asynchronously through the event queue.
+            if let Some(event_sender) = event_sender {
+                crate::cef::create(window, event_sender, url);
+                return;
+            }
+        }
+
+        let mut state = self.inner.borrow_mut();
+
+        if let Some(browser) = &state.browser {
+            let frame = browser.get_main_frame().unwrap();
+            frame.load_url(&cef::CefString::new(url));
+            return;
+        }
+
+        state.url = Some(url.to_owned());
     }
 
     fn deactivate(&self) {
@@ -424,12 +486,12 @@ impl WebBrowserRef {
         // TODO: Move all this non-sense into the type system
         // We don't test against the browser Option here because it might have not been sent from the CrMain thread yet.
         assert!(state.unknown.is_some());
-        assert!(state.window.lock().unwrap().is_some());
+        assert!(state.window.is_some());
         assert!(state.event_sender.is_none());
 
         // Destroy the old stuff
         state.unknown.take();
-        state.window.lock().unwrap().take();
+        state.window.take();
         state.browser.take();
 
         // Set up new event queue (so we don't end up processing stale events)
@@ -442,12 +504,12 @@ impl WebBrowserRef {
         // SetWindowPos can be re-entrant
         let (width, height, window, browser) = {
             let state = self.inner.borrow_mut();
-            let hwnd = state.window.lock().unwrap().clone();
+            let hwnd = state.window;
 
             (
                 state.width,
                 state.height,
-                hwnd,
+                hwnd.clone(),
                 state.browser.clone(),
             )
         };
@@ -664,12 +726,20 @@ impl WebBrowserRef {
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
                 );
-                println!("Invoke {} ret: {}", url, x);
             }
         }
     }
 
     pub fn browser_created(&self, browser: cef::CefBrowser) {
+        let url = {
+            self.inner.borrow_mut().url.take()
+        };
+
+        if let Some(url) = url {
+            println!("Cached Navigate {}", url);
+            self.browse(&url);
+        }
+
         {
             let mut state = self.inner.borrow_mut();
 
@@ -677,12 +747,8 @@ impl WebBrowserRef {
 
             let frame = browser.get_main_frame().unwrap();
 
-            if let Some(url) = &state.url {
-                println!("Cached Navigate {}", url);
-                frame.load_url(&cef::CefString::new(url));
-            }
-
             for code in &state.scripts {
+                println!("Cached JS {}", code);
                 frame.execute_java_script(
                     &cef::CefString::new(code),
                     Some(&cef::CefString::new("_byond.js")),
@@ -693,7 +759,6 @@ impl WebBrowserRef {
             state.browser = Some(browser);
         }
 
-        // TODO: This is not in main thread!
         self.on_pos_invalidated();
     }
 }
@@ -715,7 +780,7 @@ impl Default for WebBrowserState {
             document: None,
             client_site: None,
             client_sink: None,
-            window: Arc::new(Mutex::new(None)),
+            window: None,
             url: None,
             scripts: vec![],
             browser: None,
@@ -840,7 +905,8 @@ com::class! {
             }
 
             unsafe {
-                (*control).misc_status = 0;
+                // OLEMISC_RECOMPOSEONRESIZE
+                (*control).misc_status = 1u32;
                 (*control).view_status = 0;
                 (*control).event_cookie = 0;
                 (*control).prop_notify_cookie = 0;
@@ -923,6 +989,11 @@ com::class! {
                 constants::OLEIVERB_OPEN |
                 constants::OLEIVERB_HIDE => {
                     println!("Builtin Verb({:?})", iVerb);
+                    com::sys::S_OK
+                }
+
+                constants::OLEIVERB_UIACTIVATE => {
+                    self.state_ref.ui_activate();
                     com::sys::S_OK
                 }
 
@@ -1011,7 +1082,7 @@ com::class! {
             // TODO: Lazy
             // OLEMISC_RECOMPOSEONRESIZE
             unsafe {
-                *pdwStatus = 1;
+                *pdwStatus = 1u32;
             }
             com::sys::S_OK
         }
@@ -1048,7 +1119,7 @@ com::class! {
         fn GetWindow(&self, phwnd: *mut win32::HWND) -> com::sys::HRESULT {
             let state = self.state();
 
-            let hwnd = state.window.lock().unwrap().unwrap();
+            let hwnd = state.window.unwrap();
             unsafe {
                 *phwnd = hwnd;
             }
@@ -1093,16 +1164,7 @@ com::class! {
         fn Navigate(&self, URL: com::BString, _Flags: u32, _TargetFrameName: u32, _PostData: u32, _Headers: u32) -> com::sys::HRESULT {
             // TODO: The other parameters
             let url: String = (&URL).try_into().unwrap();
-
-            let mut state = self.state();
-
-            if let Some(browser) = &state.browser {
-                println!("Navigate {}", url);
-                browser.get_main_frame().unwrap().load_url(&cef::CefString::new(&url));
-                return com::sys::S_OK;
-            }
-
-            state.url = Some(url);
+            self.state_ref.browse(&url);
             com::sys::S_OK
         }
         fn Refresh(&self) -> com::sys::HRESULT {

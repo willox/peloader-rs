@@ -53,7 +53,6 @@ com::class! {
             let data: String = unsafe {
                 (&(**params).string).try_into().unwrap()
             };
-            println!("exec({:?}", data);
 
             if let Some(browser) = &state.browser {
                 let frame = browser.get_main_frame().unwrap();

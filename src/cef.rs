@@ -35,7 +35,7 @@ impl Task for PosInvalidated {
 }
 
 struct State {
-    parent: Arc<Mutex<Option<win32::HWND>>>,
+    parent: win32::HWND,
     event_sender: event_queue::Sender,
 }
 
@@ -44,31 +44,66 @@ impl State {
         // It's ok if the receiver has been destroyed - it just means we are about to be destroyed too!
         let _ = self.event_sender.send(event);
 
-        // Same deal if the parent window has been destroyed.
-        if let Some(parent) = *self.parent.lock().unwrap() {
-            unsafe {
-                win32::SendNotifyMessageA(
-                    parent,
-                    0x0400,
-                    win32::WPARAM::default(),
-                    win32::LPARAM::default(),
-                );
-            }
+        unsafe {
+            win32::SendNotifyMessageA(
+                self.parent,
+                0x0400,
+                win32::WPARAM::default(),
+                win32::LPARAM::default(),
+            );
         }
     }
 }
 
-pub struct MyApp;
+pub struct MyApp {
+    browser_process_handler: Option<CefBrowserProcessHandler>,
+}
 impl App for MyApp {
+    fn on_before_command_line_processing(&mut self, process_type: Option<&CefString>, command_line: CefCommandLine) ->() {
+        command_line.append_switch(&CefString::new("disable-smooth-scrolling"));
+        command_line.append_switch_with_value(&CefString::new("disable-features"), &CefString::new("TouchpadAndWheelScrollLatching,AsyncWheelEvents"));
+    }
+
     fn get_render_process_handler(&mut self) -> Option<CefRenderProcessHandler> {
         Some(CefRenderProcessHandler::new(MyRenderProcessHandler))
+    }
+
+    fn get_browser_process_handler(&mut self) -> Option<CefBrowserProcessHandler> {
+        self.browser_process_handler.clone()
+    }
+}
+
+struct MyKeyboardHandler {
+    parent: win32::HWND,
+}
+impl KeyboardHandler for MyKeyboardHandler {
+    fn on_key_event(&mut self, _browser: CefBrowser, _event: &cef::CefKeyEvent, os_event: cef::CefEventHandle) -> bool {
+        if os_event.is_null() {
+            return false;
+        }
+
+        return false;
+        /*
+        println!("Sending Key Event");
+
+        unsafe {
+            win32::SendMessageA(
+                self.parent,
+                (*os_event).message,
+                win32::WPARAM((*os_event).wParam as usize),
+                win32::LPARAM((*os_event).lParam as isize),
+            );
+        }
+
+        true
+        */
     }
 }
 
 struct MyFocusHandler;
 impl FocusHandler for MyFocusHandler {
-    fn on_set_focus(&mut self, _browser: CefBrowser, source: CefFocusSource) -> bool {
-        source == CefFocusSource::NAVIGATION
+    fn on_set_focus(&mut self, _browser: CefBrowser, _source: CefFocusSource) -> bool {
+        false
     }
 }
 
@@ -76,6 +111,7 @@ struct MyClient {
     life_span_handler: CefLifeSpanHandler,
     request_handler: CefRequestHandler,
     focus_handler: CefFocusHandler,
+    keyboard_handler: CefKeyboardHandler,
     state: Arc<Mutex<State>>,
 }
 
@@ -89,7 +125,11 @@ impl Client for MyClient {
     }
 
     fn get_focus_handler(&mut self) -> Option<CefFocusHandler> {
-        Some(self.focus_handler.clone())
+        None // Some(self.focus_handler.clone())
+    }
+
+    fn get_keyboard_handler(&mut self) ->Option<CefKeyboardHandler> {
+        Some(self.keyboard_handler.clone())
     }
 
     fn on_process_message_received(
@@ -113,6 +153,18 @@ impl Client for MyClient {
         }
 
         false
+    }
+}
+
+struct MyBrowserProcessHandler {
+    window: win32::HWND,
+}
+impl BrowserProcessHandler for MyBrowserProcessHandler {
+    fn on_schedule_message_pump_work(&mut self, delay_ms: i64) {
+        // This can be ran from any thread. We're not going to pull the `&MessageLoop` in here because having its RefCells accessible by this thread is a no-no
+        unsafe {
+            win32::PostMessageA(self.window, crate::message_loop::WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK, win32::WPARAM(delay_ms as usize), win32::LPARAM(0));
+        }
     }
 }
 
@@ -161,6 +213,8 @@ struct MyLifeSpanHandler {
 }
 impl LifeSpanHandler for MyLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefBrowser) {
+        let hwnd = browser.get_host().unwrap().get_window_handle();
+
         self.state
             .lock()
             .unwrap()
@@ -240,7 +294,7 @@ impl RenderProcessHandler for MyRenderProcessHandler {
 static mut INIT: bool = false;
 
 // Returns true if we are a sub-process
-pub fn init() -> bool {
+pub fn init(is_main_process: bool) -> bool {
     unsafe {
         if INIT {
             return false;
@@ -251,16 +305,26 @@ pub fn init() -> bool {
     let main_args =
         unsafe { CefMainArgs::new(win32::GetModuleHandleA(win32::PSTR::default()) as _) };
 
-    let app = ::cef::CefApp::new(crate::cef::MyApp);
+    let app = if is_main_process {
+        ::cef::CefApp::new(crate::cef::MyApp {
+            browser_process_handler: Some(MyBrowserProcessHandler {
+                window: crate::message_loop::init(),
+            }.into()),
+        })
+    } else {
+        ::cef::CefApp::new(crate::cef::MyApp {
+            browser_process_handler: None,
+        })
+    };
 
     if cef_execute_process(&main_args, Some(app.clone()), None) >= 0 {
         return true;
     }
     let settings = CefSettings::default()
         .set_no_sandbox(1)
+        .set_external_message_pump(1)
         .set_log_severity(CefLogSeverity::VERBOSE)
         .set_log_file("E:/log.txt")
-        .set_multi_threaded_message_loop(1)
         .set_remote_debugging_port(1339)
         .build();
     assert!(cef_initialize(
@@ -277,9 +341,7 @@ pub fn init() -> bool {
     false
 }
 
-pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue::Sender) {
-    let hwnd = parent.lock().unwrap().unwrap().clone();
-
+pub fn create(parent: win32::HWND, event_sender: event_queue::Sender, url: &str) -> (CefBrowser, win32::HWND) {
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0) // | win32::WINDOW_STYLE::WS_DLGFRAME.0)
@@ -289,12 +351,12 @@ pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue
             .set_width(512)
             .set_height(512)
             .set_window_name("hello, world!")
-            .set_parent_window(std::mem::transmute(hwnd))
+            .set_parent_window(std::mem::transmute(parent))
             .build()
     };
 
     let state = Arc::new(Mutex::new(State {
-        parent,
+        parent: parent,
         event_sender,
     }));
 
@@ -308,17 +370,24 @@ pub fn create(parent: Arc<Mutex<Option<win32::HWND>>>, event_sender: event_queue
         }
         .into(),
         focus_handler: MyFocusHandler.into(),
+        keyboard_handler: MyKeyboardHandler {
+            parent
+        }.into(),
         state,
     });
 
     let browser_settings = CefBrowserSettings::default();
 
-    assert!(CefBrowserHost::create_browser(
+    let browser = CefBrowserHost::create_browser_sync(
         &window_info,
         Some(client.clone()),
-        None,
+        Some(&CefString::new(url)),
         &browser_settings,
         None,
         None,
-    ));
+    ).unwrap();
+
+    unsafe {
+        (browser.clone(), std::mem::transmute(browser.get_host().unwrap().get_window_handle()))
+    }
 }

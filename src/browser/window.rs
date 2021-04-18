@@ -6,6 +6,20 @@ extern "system" fn window_proc(
     w_param: win32::WPARAM,
     l_param: win32::LPARAM,
 ) -> win32::LRESULT {
+
+
+
+    if message == win32::WM_SIZE {
+        unsafe {
+            win32::SetTimer(hwnd, 0, 1, None);
+        }
+    } else if message == win32::WM_TIMER {
+        println!("Focus = {}", unsafe { win32::GetFocus().0 });
+    } else {
+        println!("Host Event {}", message);
+    }
+
+
     // TODO: lazy
     if message == 0x0400 {
         let state_ref: &crate::browser::WebBrowserRef = unsafe {
@@ -23,10 +37,10 @@ extern "system" fn window_proc(
 pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) -> win32::HWND {
     unsafe {
         let hwnd = win32::CreateWindowExA(
-            win32::WINDOW_EX_STYLE::WS_EX_NOACTIVATE,
+            win32::WINDOW_EX_STYLE::from(win32::WINDOW_EX_STYLE::WS_EX_NOACTIVATE.0),
             "DreamLoader_WebBrowser",
             "fuk",
-            win32::WINDOW_STYLE::WS_CHILD,
+            win32::WINDOW_STYLE::from(win32::WINDOW_STYLE::WS_CHILD.0 | win32::WINDOW_STYLE::WS_DISABLED.0), // win32::WINDOW_STYLE::WS_CHILD,
             0,
             0,
             32,
@@ -39,7 +53,6 @@ pub fn create(parent: win32::HWND, state_ref: &crate::browser::WebBrowserRef) ->
 
         let ptr: *const _ = state_ref;
         win32::SetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default(), ptr as _);
-
         hwnd
     }
 }
