@@ -26,7 +26,10 @@ impl Task for PosInvalidated {
                     0,
                     self.w,
                     self.h,
-                    win32::SetWindowPos_uFlags::from(win32::SetWindowPos_uFlags::SWP_NOZORDER.0 | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0)
+                    win32::SetWindowPos_uFlags::from(
+                        win32::SetWindowPos_uFlags::SWP_NOZORDER.0
+                            | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0
+                    )
                 ),
                 false
             );
@@ -45,7 +48,7 @@ impl State {
         let _ = self.event_sender.send(event);
 
         unsafe {
-            win32::SendNotifyMessageA(
+            win32::PostMessageA(
                 self.parent,
                 0x0400,
                 win32::WPARAM::default(),
@@ -59,11 +62,6 @@ pub struct MyApp {
     browser_process_handler: Option<CefBrowserProcessHandler>,
 }
 impl App for MyApp {
-    fn on_before_command_line_processing(&mut self, process_type: Option<&CefString>, command_line: CefCommandLine) ->() {
-        command_line.append_switch(&CefString::new("disable-smooth-scrolling"));
-        command_line.append_switch_with_value(&CefString::new("disable-features"), &CefString::new("TouchpadAndWheelScrollLatching,AsyncWheelEvents"));
-    }
-
     fn get_render_process_handler(&mut self) -> Option<CefRenderProcessHandler> {
         Some(CefRenderProcessHandler::new(MyRenderProcessHandler))
     }
@@ -77,12 +75,14 @@ struct MyKeyboardHandler {
     parent: win32::HWND,
 }
 impl KeyboardHandler for MyKeyboardHandler {
-    fn on_key_event(&mut self, _browser: CefBrowser, _event: &cef::CefKeyEvent, os_event: cef::CefEventHandle) -> bool {
-        if os_event.is_null() {
-            return false;
-        }
-
-        return false;
+    fn on_key_event(
+        &mut self,
+        _browser: CefBrowser,
+        _event: &cef::CefKeyEvent,
+        os_event: cef::CefEventHandle,
+    ) -> bool {
+        println!("KEY EVENT");
+        false
         /*
         println!("Sending Key Event");
 
@@ -102,8 +102,9 @@ impl KeyboardHandler for MyKeyboardHandler {
 
 struct MyFocusHandler;
 impl FocusHandler for MyFocusHandler {
-    fn on_set_focus(&mut self, _browser: CefBrowser, _source: CefFocusSource) -> bool {
-        false
+    fn on_set_focus(&mut self, _browser: CefBrowser, source: CefFocusSource) -> bool {
+        // Don't let navigation force us to focus! Why would we want that in our beautiful space game.
+        source == CefFocusSource::NAVIGATION
     }
 }
 
@@ -125,10 +126,10 @@ impl Client for MyClient {
     }
 
     fn get_focus_handler(&mut self) -> Option<CefFocusHandler> {
-        None // Some(self.focus_handler.clone())
+        Some(self.focus_handler.clone())
     }
 
-    fn get_keyboard_handler(&mut self) ->Option<CefKeyboardHandler> {
+    fn get_keyboard_handler(&mut self) -> Option<CefKeyboardHandler> {
         Some(self.keyboard_handler.clone())
     }
 
@@ -163,7 +164,12 @@ impl BrowserProcessHandler for MyBrowserProcessHandler {
     fn on_schedule_message_pump_work(&mut self, delay_ms: i64) {
         // This can be ran from any thread. We're not going to pull the `&MessageLoop` in here because having its RefCells accessible by this thread is a no-no
         unsafe {
-            win32::PostMessageA(self.window, crate::message_loop::WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK, win32::WPARAM(delay_ms as usize), win32::LPARAM(0));
+            win32::PostMessageA(
+                self.window,
+                crate::message_loop::WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK,
+                win32::WPARAM(delay_ms as usize),
+                win32::LPARAM(0),
+            );
         }
     }
 }
@@ -307,9 +313,12 @@ pub fn init(is_main_process: bool) -> bool {
 
     let app = if is_main_process {
         ::cef::CefApp::new(crate::cef::MyApp {
-            browser_process_handler: Some(MyBrowserProcessHandler {
-                window: crate::message_loop::init(),
-            }.into()),
+            browser_process_handler: Some(
+                MyBrowserProcessHandler {
+                    window: crate::message_loop::init(),
+                }
+                .into(),
+            ),
         })
     } else {
         ::cef::CefApp::new(crate::cef::MyApp {
@@ -341,11 +350,15 @@ pub fn init(is_main_process: bool) -> bool {
     false
 }
 
-pub fn create(parent: win32::HWND, event_sender: event_queue::Sender, url: &str) -> (CefBrowser, win32::HWND) {
+pub fn create(
+    parent: win32::HWND,
+    event_sender: event_queue::Sender,
+    url: &str,
+) -> (CefBrowser, win32::HWND) {
     let window_info = unsafe {
         CefWindowInfo::default()
             .set_style(win32::WINDOW_STYLE::WS_VISIBLE.0 | win32::WINDOW_STYLE::WS_CHILD.0) // | win32::WINDOW_STYLE::WS_DLGFRAME.0)
-            .set_ex_style(win32::WINDOW_EX_STYLE::WS_EX_NOACTIVATE.0)
+            .set_ex_style(0 /*win32::WINDOW_EX_STYLE::WS_EX_NOACTIVATE.0*/)
             .set_x(-1)
             .set_y(-1)
             .set_width(512)
@@ -370,9 +383,7 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender, url: &str)
         }
         .into(),
         focus_handler: MyFocusHandler.into(),
-        keyboard_handler: MyKeyboardHandler {
-            parent
-        }.into(),
+        keyboard_handler: MyKeyboardHandler { parent }.into(),
         state,
     });
 
@@ -385,9 +396,13 @@ pub fn create(parent: win32::HWND, event_sender: event_queue::Sender, url: &str)
         &browser_settings,
         None,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     unsafe {
-        (browser.clone(), std::mem::transmute(browser.get_host().unwrap().get_window_handle()))
+        (
+            browser.clone(),
+            std::mem::transmute(browser.get_host().unwrap().get_window_handle()),
+        )
     }
 }

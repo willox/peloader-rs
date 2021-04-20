@@ -45,7 +45,12 @@ pub fn init() -> win32::HWND {
 
     unsafe {
         win32::SetWindowLongA(window, win32::WINDOW_LONG_PTR_INDEX::default(), ptr as _);
-        win32::PostMessageA(window, WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK, win32::WPARAM(0), win32::LPARAM(0));
+        win32::PostMessageA(
+            window,
+            WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK,
+            win32::WPARAM(0),
+            win32::LPARAM(0),
+        );
     }
 
     window
@@ -72,7 +77,8 @@ impl MessageLoop {
         match message {
             WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK => {
                 let this: &Self = unsafe {
-                    let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX(0)) as *const Self;
+                    let ptr =
+                        win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX(0)) as *const Self;
                     &*ptr
                 };
 
@@ -82,10 +88,10 @@ impl MessageLoop {
 
             win32::WM_TIMER if w_param == TIMER_PERFORM_MESSAGE_LOOP_WORK => {
                 let this: &Self = unsafe {
-                    let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX(0)) as *const Self;
+                    let ptr =
+                        win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX(0)) as *const Self;
                     &*ptr
                 };
-
 
                 this.on_timer_expired();
                 win32::LRESULT(0)
@@ -94,19 +100,12 @@ impl MessageLoop {
             win32::WM_CLOSE => {
                 // TODO: Box::from_raw the state, remove it from the window, etc.
                 // There's no point doing this unless we actually make sure nothing is referring to the MessageLoop, so for now just let it leak.
-                unsafe {
-                    win32::DefWindowProcA(hwnd, message, w_param, l_param)
-                }
+                unsafe { win32::DefWindowProcA(hwnd, message, w_param, l_param) }
             }
 
-            _ => {
-                unsafe {
-                    win32::DefWindowProcA(hwnd, message, w_param, l_param)
-                }
-            }
+            _ => unsafe { win32::DefWindowProcA(hwnd, message, w_param, l_param) },
         }
     }
-
 
     fn do_message_loop_work(&self) {
         /// Returns true if a reentrant call to do_message_loop_work occured while running. This would mean that another do_message_loop_work call needs to be scheduled.
@@ -133,7 +132,12 @@ impl MessageLoop {
         if inner_do_message_loop_work(self) {
             // We've got to go again. Schedule a call at the end of our window's message queue.
             unsafe {
-                win32::PostMessageA(self.window, WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK, win32::WPARAM(0), win32::LPARAM(0));
+                win32::PostMessageA(
+                    self.window,
+                    WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK,
+                    win32::WPARAM(0),
+                    win32::LPARAM(0),
+                );
             }
             return;
         }
@@ -141,7 +145,12 @@ impl MessageLoop {
         // TODO: Didn't code this!
         // If no timer, make one for 15ms!
         unsafe {
-            win32::PostMessageA(self.window, WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK, win32::WPARAM(1), win32::LPARAM(0));
+            win32::PostMessageA(
+                self.window,
+                WM_USER_ON_SCHEDULE_MESSAGE_PUMP_WORK,
+                win32::WPARAM(1),
+                win32::LPARAM(0),
+            );
         }
     }
 
@@ -159,7 +168,12 @@ impl MessageLoop {
         let delay_ms = delay_ms.max(15);
 
         unsafe {
-            win32::SetTimer(self.window, TIMER_PERFORM_MESSAGE_LOOP_WORK.0, delay_ms as u32, None);
+            win32::SetTimer(
+                self.window,
+                TIMER_PERFORM_MESSAGE_LOOP_WORK.0,
+                delay_ms as u32,
+                None,
+            );
         }
     }
 
@@ -176,4 +190,3 @@ impl MessageLoop {
         }
     }
 }
-

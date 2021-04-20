@@ -1,6 +1,7 @@
 mod constants;
 mod document;
 pub mod event_queue;
+mod pre_translate_message;
 mod script;
 mod structs;
 mod window;
@@ -34,6 +35,8 @@ static CLSID_WEB_BROWSER: CLSID = CLSID(
 );
 
 pub fn init() {
+    pre_translate_message::init();
+
     com::runtime::init_runtime().unwrap();
     window::init();
 
@@ -225,6 +228,7 @@ com::interfaces! {
 
     #[uuid("EAB22AC1-30C1-11CF-A7EB-0000C05BAE0B")]
     pub unsafe interface IWebBrowser : $IDispatch {
+        // 7
         fn GoBack(&self) -> com::sys::HRESULT;
         fn GoFoward(&self) -> com::sys::HRESULT;
         fn GoHome(&self) -> com::sys::HRESULT;
@@ -420,15 +424,12 @@ impl WebBrowserRef {
                 .query_interface()
                 .unwrap();
 
-
-
             unsafe {
                 in_place_site.GetWindow(&mut res);
             }
 
             res
         };
-
 
         let event_sender = state.event_sender.take();
 
@@ -439,8 +440,8 @@ impl WebBrowserRef {
 
         std::mem::drop(state);
 
-        //let window = window::create(parent, self);
-        let (browser, window) = crate::cef::create(parent, event_sender.unwrap(), &url);
+        let window = window::create(parent, self);
+        let (browser, _) = crate::cef::create(window, event_sender.unwrap(), &url);
 
         {
             let mut state = self.inner.borrow_mut();
@@ -456,10 +457,7 @@ impl WebBrowserRef {
         {
             let (window, event_sender) = {
                 let mut state = self.inner.borrow_mut();
-                (
-                    state.window.clone().unwrap(),
-                    state.event_sender.take()
-                )
+                (state.window.clone().unwrap(), state.event_sender.take())
             };
 
             // We get the result of this asynchronously through the event queue.
@@ -524,7 +522,10 @@ impl WebBrowserRef {
                         0,
                         width,
                         height,
-                        win32::SetWindowPos_uFlags::from(win32::SetWindowPos_uFlags::SWP_NOZORDER.0 | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0),
+                        win32::SetWindowPos_uFlags::from(
+                            win32::SetWindowPos_uFlags::SWP_NOZORDER.0
+                                | win32::SetWindowPos_uFlags::SWP_NOACTIVATE.0
+                        ),
                     ),
                     false
                 );
@@ -731,9 +732,12 @@ impl WebBrowserRef {
     }
 
     pub fn browser_created(&self, browser: cef::CefBrowser) {
-        let url = {
-            self.inner.borrow_mut().url.take()
-        };
+        {
+            let mut state = self.inner.borrow_mut();
+            state.browser = Some(browser.clone());
+        }
+
+        let url = { self.inner.borrow_mut().url.take() };
 
         if let Some(url) = url {
             println!("Cached Navigate {}", url);
@@ -741,9 +745,7 @@ impl WebBrowserRef {
         }
 
         {
-            let mut state = self.inner.borrow_mut();
-
-            assert!(state.browser.is_none());
+            let state = self.inner.borrow_mut();
 
             let frame = browser.get_main_frame().unwrap();
 
@@ -755,8 +757,6 @@ impl WebBrowserRef {
                     0,
                 );
             }
-
-            state.browser = Some(browser);
         }
 
         self.on_pos_invalidated();
@@ -1053,6 +1053,8 @@ com::class! {
                 state.height = h;
             }
 
+            println!("SetExtent");
+
             self.state_ref.on_pos_invalidated();
             com::sys::S_OK
         }
@@ -1141,6 +1143,7 @@ com::class! {
         }
         fn SetObjectRects(&self, _pos: *const structs::Size, _rect: *const structs::Size) -> com::sys::HRESULT {
             // Always (0, 0, 0, 0). Just ignore them, I guess...
+            println!("SetObjectRects");
             com::sys::S_OK
         }
         fn ReactiveAndUndo(&self) -> com::sys::HRESULT {
@@ -1182,6 +1185,7 @@ com::class! {
         fn get_Parent(&self, ppDisp: *mut *mut u32) -> com::sys::HRESULT {
             let state = self.state();
 
+            // TODO: Is this right
             let dispatch: com::interfaces::IDispatch = state.client_site.as_ref().unwrap().query_interface().unwrap();
             unsafe {
                 *ppDisp = std::mem::transmute(dispatch);

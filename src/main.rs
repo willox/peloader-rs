@@ -2,8 +2,8 @@
 
 mod browser;
 mod cef;
-mod win32;
 mod message_loop;
+mod win32;
 
 use detour::RawDetour;
 use pelite::pe32::{Pe, PeView};
@@ -69,23 +69,22 @@ fn main() {
 
     std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
 
-    {
-        let set_foreground_window_original = unsafe {
-            let module = win32::LoadLibraryA("user32.dll");
-            win32::GetProcAddress(module, "SetForegroundWindow").unwrap()
-        };
-
-        unsafe {
-            let detour = RawDetour::new(
-                set_foreground_window_original as _,
-                set_foreground_window_hook as _,
-            )
-            .unwrap();
-            detour.enable().unwrap();
-            std::mem::forget(detour);
-        }
-    }
-
+    //    {
+    //        let set_foreground_window_original = unsafe {
+    //            let module = win32::LoadLibraryA("user32.dll");
+    //            win32::GetProcAddress(module, "SetForegroundWindow").unwrap()
+    //        };
+    //
+    //        unsafe {
+    //            let detour = RawDetour::new(
+    //                set_foreground_window_original as _,
+    //                set_foreground_window_hook as _,
+    //            )
+    //            .unwrap();
+    //            detour.enable().unwrap();
+    //            std::mem::forget(detour);
+    //        }
+    //    }
 
     let scanner = sigscan::Scanner::for_module("ntdll.dll").unwrap();
 

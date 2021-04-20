@@ -16,6 +16,7 @@ fn main() {
         Windows::Win32::DisplayDevices::RECT,
         Windows::Win32::WindowsAndMessaging::{
             CreateWindowExA,
+            GetClassNameA,
             SetWindowPos,
             ShowWindow,
             RegisterClassA,
@@ -27,6 +28,8 @@ fn main() {
             GetWindowLongA,
             SetTimer,
             KillTimer,
+            TranslateMessage,
+            DispatchMessageA,
             WM_PAINT,
             WM_SIZE,
             WM_MOVE,
