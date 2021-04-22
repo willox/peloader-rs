@@ -201,7 +201,7 @@ struct MyContextMenuHandler;
 impl ContextMenuHandler for MyContextMenuHandler {
     fn on_before_context_menu(&mut self, _browser: CefBrowser, _frame: CefFrame, _params: CefContextMenuParams, model: CefMenuModel) {
         assert_eq!(model.add_separator(), true);
-        assert_eq!(model.add_item(1337, &CefString::new("Developer Tools")), true);
+        assert_eq!(model.add_item(1337, &CefString::new("Inspect Element")), true);
     }
 
     fn on_context_menu_command(&mut self, browser: CefBrowser, _frame: CefFrame, params: CefContextMenuParams, command_id: i32, _event_flags: CefEventFlags) -> bool {
