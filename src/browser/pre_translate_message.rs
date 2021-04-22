@@ -1,6 +1,9 @@
 /// This is a hook for BYOND's CVHTMLCtrl::PreTranslateMessage to stop it from intercepting
 /// messages meant for the Chromium windows. It's may break some niche features such as
 /// special key binds that CVHtmlCtrl::PreTranslateMessage tries to implement for the control.
+///
+/// Note: This was changed to hook CWinThread::PreTranslateMessage before it calls any other
+///       PreTranslateMethod implementation
 use std::{ffi::c_void};
 
 use crate::win32;
@@ -32,12 +35,12 @@ unsafe extern "fastcall" fn hook(this: *mut c_void, edx: u32, msg: *const win32:
 
 pub fn init() {
     unsafe {
-        let byondwin = win32::LoadLibraryA("byondwin.dll");
+        let mfc120u = win32::LoadLibraryA("mfc120u.dll");
 
         {
             let original = win32::GetProcAddress(
-                byondwin,
-                "?PreTranslateMessage@CVHTMLCtrl@@UAEHPAUtagMSG@@@Z",
+                mfc120u,
+                std::mem::transmute::<_, win32::PSTR>(12094), //"?PreTranslateMessage@CWinThread@@UAEHPAUtagMSG@@@Z",
             )
             .unwrap();
 
