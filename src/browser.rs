@@ -391,17 +391,21 @@ pub struct WebBrowserState {
     pub command_queue: Arc<Mutex<Vec<String>>>,
     pub event_receiver: event_queue::Receiver,
     pub event_sender: Option<event_queue::Sender>,
+    pub has_focus: bool,
 }
 
 impl WebBrowserRef {
-    fn ui_activate(&self) {
-        let state = self.inner.borrow_mut();
+    fn focus_update(&self, has_focus: bool) {
+        let mut state = self.inner.borrow_mut();
 
-        println!("UI Activate");
+        if has_focus == state.has_focus {
+            return;
+        }
+
+        state.has_focus = has_focus;
 
         if let Some(browser) = &state.browser {
-            //browser.get_host().unwrap().set_focus(true);
-            //browser.get_host().unwrap().send_focus_event(true);
+            browser.get_host().unwrap().set_focus(has_focus);
         }
     }
 
@@ -717,7 +721,7 @@ impl WebBrowserRef {
 
         if let Some(sink) = &sink {
             unsafe {
-                let x = sink.Invoke(
+                let _ = sink.Invoke(
                     250,
                     (&CLSID_NULL) as *const _ as *const com::sys::IID,
                     0,
@@ -747,6 +751,7 @@ impl WebBrowserRef {
         {
             let state = self.inner.borrow_mut();
 
+            browser.get_host().unwrap().set_focus(true);
             let frame = browser.get_main_frame().unwrap();
 
             for code in &state.scripts {
@@ -787,6 +792,7 @@ impl Default for WebBrowserState {
             command_queue: Arc::new(Mutex::new(vec![])),
             event_sender: Some(event_sender),
             event_receiver,
+            has_focus: false,
         }
     }
 }
@@ -993,7 +999,6 @@ com::class! {
                 }
 
                 constants::OLEIVERB_UIACTIVATE => {
-                    self.state_ref.ui_activate();
                     com::sys::S_OK
                 }
 

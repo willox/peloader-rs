@@ -17,6 +17,7 @@ fn main() {
         Windows::Win32::WindowsAndMessaging::{
             CreateWindowExA,
             GetClassNameA,
+            GetParent,
             SetWindowPos,
             ShowWindow,
             RegisterClassA,

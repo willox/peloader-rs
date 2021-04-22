@@ -71,35 +71,6 @@ impl App for MyApp {
     }
 }
 
-struct MyKeyboardHandler {
-    parent: win32::HWND,
-}
-impl KeyboardHandler for MyKeyboardHandler {
-    fn on_key_event(
-        &mut self,
-        _browser: CefBrowser,
-        _event: &cef::CefKeyEvent,
-        os_event: cef::CefEventHandle,
-    ) -> bool {
-        println!("KEY EVENT");
-        false
-        /*
-        println!("Sending Key Event");
-
-        unsafe {
-            win32::SendMessageA(
-                self.parent,
-                (*os_event).message,
-                win32::WPARAM((*os_event).wParam as usize),
-                win32::LPARAM((*os_event).lParam as isize),
-            );
-        }
-
-        true
-        */
-    }
-}
-
 struct MyFocusHandler;
 impl FocusHandler for MyFocusHandler {
     fn on_set_focus(&mut self, _browser: CefBrowser, source: CefFocusSource) -> bool {
@@ -112,7 +83,6 @@ struct MyClient {
     life_span_handler: CefLifeSpanHandler,
     request_handler: CefRequestHandler,
     focus_handler: CefFocusHandler,
-    keyboard_handler: CefKeyboardHandler,
     state: Arc<Mutex<State>>,
 }
 
@@ -127,10 +97,6 @@ impl Client for MyClient {
 
     fn get_focus_handler(&mut self) -> Option<CefFocusHandler> {
         Some(self.focus_handler.clone())
-    }
-
-    fn get_keyboard_handler(&mut self) -> Option<CefKeyboardHandler> {
-        Some(self.keyboard_handler.clone())
     }
 
     fn on_process_message_received(
@@ -219,8 +185,6 @@ struct MyLifeSpanHandler {
 }
 impl LifeSpanHandler for MyLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefBrowser) {
-        let hwnd = browser.get_host().unwrap().get_window_handle();
-
         self.state
             .lock()
             .unwrap()
@@ -383,7 +347,6 @@ pub fn create(
         }
         .into(),
         focus_handler: MyFocusHandler.into(),
-        keyboard_handler: MyKeyboardHandler { parent }.into(),
         state,
     });
 

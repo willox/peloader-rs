@@ -21,10 +21,6 @@ static mut GET_ORIGINAL: Option<
     extern "stdcall" fn(handle: usize, buffer: *mut u8, buffer_len: usize) -> usize,
 > = None;
 
-extern "stdcall" fn set_foreground_window_hook(hwnd: win32::HWND) -> u32 {
-    return 1;
-}
-
 extern "stdcall" fn get_module_file_name_w_hook(
     handle: usize,
     buffer: *mut u8,
@@ -68,23 +64,6 @@ fn main() {
     }
 
     std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
-
-    //    {
-    //        let set_foreground_window_original = unsafe {
-    //            let module = win32::LoadLibraryA("user32.dll");
-    //            win32::GetProcAddress(module, "SetForegroundWindow").unwrap()
-    //        };
-    //
-    //        unsafe {
-    //            let detour = RawDetour::new(
-    //                set_foreground_window_original as _,
-    //                set_foreground_window_hook as _,
-    //            )
-    //            .unwrap();
-    //            detour.enable().unwrap();
-    //            std::mem::forget(detour);
-    //        }
-    //    }
 
     let scanner = sigscan::Scanner::for_module("ntdll.dll").unwrap();
 

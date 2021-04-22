@@ -1,17 +1,42 @@
 use crate::win32;
 
+unsafe fn is_child(parent: win32::HWND, mut child: win32::HWND) -> bool {
+    while child != win32::HWND(0) {
+        child = win32::GetParent(child);
+        if parent == child {
+            return true
+        }
+    }
+    false
+}
+
 extern "system" fn window_proc(
     hwnd: win32::HWND,
     message: u32,
     w_param: win32::WPARAM,
     l_param: win32::LPARAM,
 ) -> win32::LRESULT {
+    // TODO: Here lies an awful hack to send focus events to CEF when it is focused
+    // Yeah that sucks. A better hack would be to hook into the CEF widget's messages.
     if message == win32::WM_SIZE {
         unsafe {
             win32::SetTimer(hwnd, 0, 1, None);
         }
     } else if message == win32::WM_TIMER {
-        println!("Focus = {}", unsafe { win32::GetFocus().0 });
+        let focused = unsafe { win32::GetFocus() };
+        println!("Focus = {}", focused.0);
+
+        let is_child = unsafe {
+            is_child(hwnd, focused)
+        };
+
+        let state_ref: &crate::browser::WebBrowserRef = unsafe {
+            let ptr = win32::GetWindowLongA(hwnd, win32::WINDOW_LONG_PTR_INDEX::default())
+                as *const crate::browser::WebBrowserRef;
+            std::mem::transmute(ptr)
+        };
+
+        state_ref.focus_update(is_child);
     }
 
     // TODO: lazy
