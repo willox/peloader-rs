@@ -83,6 +83,7 @@ struct MyClient {
     life_span_handler: CefLifeSpanHandler,
     request_handler: CefRequestHandler,
     focus_handler: CefFocusHandler,
+    context_menu_handler: CefContextMenuHandler,
     state: Arc<Mutex<State>>,
 }
 
@@ -97,6 +98,10 @@ impl Client for MyClient {
 
     fn get_focus_handler(&mut self) -> Option<CefFocusHandler> {
         Some(self.focus_handler.clone())
+    }
+
+    fn get_context_menu_handler(&mut self) -> Option<CefContextMenuHandler> {
+        Some(self.context_menu_handler.clone())
     }
 
     fn on_process_message_received(
@@ -189,6 +194,41 @@ impl LifeSpanHandler for MyLifeSpanHandler {
             .lock()
             .unwrap()
             .send_event(event_queue::Event::BrowserCreated(browser));
+    }
+}
+
+struct MyContextMenuHandler;
+impl ContextMenuHandler for MyContextMenuHandler {
+    fn on_before_context_menu(&mut self, _browser: CefBrowser, _frame: CefFrame, _params: CefContextMenuParams, model: CefMenuModel) {
+        assert_eq!(model.add_separator(), true);
+        assert_eq!(model.add_item(1337, &CefString::new("Developer Tools")), true);
+    }
+
+    fn on_context_menu_command(&mut self, browser: CefBrowser, _frame: CefFrame, params: CefContextMenuParams, command_id: i32, _event_flags: CefEventFlags) -> bool {
+        if command_id == 1337 {
+            let host = browser.get_host().unwrap();
+            let main_frame = browser.get_main_frame().unwrap();
+
+            let window = CefWindowInfo::default()
+                .set_window_name(&format!("{:#02x} - Developer Tools", main_frame.get_identifier()))
+                .set_style(win32::WINDOW_STYLE::WS_OVERLAPPEDWINDOW.0 | win32::WINDOW_STYLE::WS_CLIPCHILDREN.0 | win32::WINDOW_STYLE::WS_CLIPSIBLINGS.0 | win32::WINDOW_STYLE::WS_VISIBLE.0)
+                .set_x(-1)
+                .set_y(-1)
+                .set_width(1000)
+                .set_height(600)
+                .build();
+
+            let point = CefPoint::default()
+                .set_x(params.get_xcoord())
+                .set_y(params.get_ycoord())
+                .build();
+
+            host.show_dev_tools(Some(&window), None, None, Some(&point));
+
+            return true;
+        }
+
+        false
     }
 }
 
@@ -296,9 +336,7 @@ pub fn init(is_main_process: bool) -> bool {
     let settings = CefSettings::default()
         .set_no_sandbox(1)
         .set_external_message_pump(1)
-        .set_log_severity(CefLogSeverity::VERBOSE)
-        .set_log_file("E:/log.txt")
-        .set_remote_debugging_port(1339)
+        .set_log_severity(CefLogSeverity::ERROR)
         .build();
     assert!(cef_initialize(
         &main_args,
@@ -347,6 +385,7 @@ pub fn create(
         }
         .into(),
         focus_handler: MyFocusHandler.into(),
+        context_menu_handler: MyContextMenuHandler.into(),
         state,
     });
 

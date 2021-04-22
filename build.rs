@@ -39,6 +39,7 @@ fn main() {
             WM_CLOSE,
             WM_USER,
             HWND_MESSAGE,
+            WINDOW_STYLE,
             MSG,
         },
         Windows::Win32::Gdi::{
