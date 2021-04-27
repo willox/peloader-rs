@@ -71,13 +71,6 @@ unsafe extern "stdcall" fn co_get_class_object_hook(
     riid: *const CLSID,
     e: *mut *const c_void,
 ) -> u32 {
-    // TODO: Move to another hook somewhere in byond?
-    // We do our late initialization here because doing it before BYOND has loaded makes MFC sad somehow.
-    // Could be investigated but it's no big deal.
-    if crate::cef::init(true) {
-        unreachable!()
-    }
-
     if *clsid == CLSID_WEB_BROWSER {
         let x = WebBrowserClassFactory::allocate();
         let res = x.QueryInterface(std::mem::transmute(riid), std::mem::transmute(e));

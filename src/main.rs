@@ -67,10 +67,13 @@ extern "stdcall" fn get_module_file_name_w_hook(
 }
 
 fn main() {
+    // Short cut for chromium sub-processes
     if std::env::args().any(|x| x.contains("--type=")) {
-        assert!(cef::init(false));
+        assert_eq!(cef::init(false), true);
         return;
     }
+
+    assert_eq!(cef::init(true), false);
 
     // TODO: Move this to a config or something
     std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
