@@ -24,7 +24,6 @@ extern "system" fn window_proc(
         }
     } else if message == win32::WM_TIMER {
         let focused = unsafe { win32::GetFocus() };
-        println!("Focus = {}", focused.0);
 
         let is_child = unsafe {
             is_child(hwnd, focused)

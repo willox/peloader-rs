@@ -168,7 +168,6 @@ impl RequestHandler for MyRequestHandler {
         let scheme = parts.scheme().to_ascii_lowercase();
 
         if scheme == "byond" || scheme == "pager" {
-            println!("UrlNavigate: {}", url);
             self.state
                 .lock()
                 .unwrap()

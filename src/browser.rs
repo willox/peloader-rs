@@ -737,7 +737,6 @@ impl WebBrowserRef {
         let url = { self.inner.borrow_mut().url.take() };
 
         if let Some(url) = url {
-            println!("Cached Navigate {}", url);
             self.browse(&url);
         }
 
@@ -748,7 +747,6 @@ impl WebBrowserRef {
             let frame = browser.get_main_frame().unwrap();
 
             for code in &state.scripts {
-                println!("Cached JS {}", code);
                 frame.execute_java_script(
                     &cef::CefString::new(code),
                     Some(&cef::CefString::new("_byond.js")),
@@ -1051,8 +1049,6 @@ com::class! {
                 state.height = h;
             }
 
-            println!("SetExtent");
-
             self.state_ref.on_pos_invalidated();
             com::sys::S_OK
         }
@@ -1141,7 +1137,6 @@ com::class! {
         }
         fn SetObjectRects(&self, _pos: *const structs::Size, _rect: *const structs::Size) -> com::sys::HRESULT {
             // Always (0, 0, 0, 0). Just ignore them, I guess...
-            println!("SetObjectRects");
             com::sys::S_OK
         }
         fn ReactiveAndUndo(&self) -> com::sys::HRESULT {
