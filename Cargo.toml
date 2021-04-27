@@ -21,7 +21,6 @@ default-features = false
 
 [build-dependencies]
 windows = "0.7.0"
-cc = "1.0"
 
 [profile.dev]
 panic = "abort"

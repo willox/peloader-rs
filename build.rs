@@ -1,9 +1,4 @@
 fn main() {
-    cc::Build::new()
-        .cpp(true)
-        .file("test.cpp")
-        .compile("test.lib");
-
     windows::build!(
         Windows::Win32::KeyboardAndMouseInput::{
             GetFocus,
