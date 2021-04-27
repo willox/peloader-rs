@@ -73,8 +73,6 @@ fn main() {
         return;
     }
 
-    assert_eq!(cef::init(true), false);
-
     // TODO: Move this to a config or something
     std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
 
@@ -186,5 +184,6 @@ fn main() {
     );
 
     browser::init();
+    assert_eq!(cef::init(true), false);
     entry_point();
 }
