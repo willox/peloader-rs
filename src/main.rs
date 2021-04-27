@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![windows_subsystem = "console"]
 
 mod browser;
 mod cef;
@@ -63,6 +63,7 @@ fn main() {
         return;
     }
 
+    // TODO: Move this to a config or something
     std::env::set_current_dir("E:\\byond_builds\\514.1552_byond\\byond\\bin").unwrap();
 
     let scanner = sigscan::Scanner::for_module("ntdll.dll").unwrap();
@@ -92,7 +93,7 @@ fn main() {
 
     let insert_func_table: InsertedFunctionTableTy = unsafe { std::mem::transmute(scan) };
 
-    let path = Path::new(r"E:\byond_builds\514.1552_byond\byond\bin\dreamseeker.exe");
+    let path = Path::new("dreamseeker.exe");
 
     let map = ImageMap::open(path).unwrap();
     let view = PeView::from_bytes(&map).unwrap();
