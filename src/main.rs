@@ -18,39 +18,48 @@ type InsertedFunctionTableTy = extern "fastcall" fn(image_base: *const c_char, i
 
 static mut HANDLE: usize = 0;
 static mut GET_ORIGINAL: Option<
-    extern "stdcall" fn(handle: usize, buffer: *mut u8, buffer_len: usize) -> usize,
+    extern "stdcall" fn(handle: usize, buffer: *mut u16, buffer_len: usize) -> usize,
 > = None;
 
 extern "stdcall" fn get_module_file_name_w_hook(
     handle: usize,
-    buffer: *mut u8,
+    buffer: *mut u16,
     buffer_len: usize,
 ) -> usize {
     unsafe {
         if handle == HANDLE {
-            if buffer_len < 16 {
-                // TODO: implement
-                return 0;
+            // "dreamseeker.exe\0", probably
+            let src: [u16; 16] = [
+                0x64,
+                0x72,
+                0x65,
+                0x61,
+                0x6D,
+                0x73,
+                0x65,
+                0x65,
+                0x6B,
+                0x65,
+                0x62,
+                0x2E,
+                0x65,
+                0x78,
+                0x65,
+                0x00,
+            ];
+
+            let len = buffer_len.min(src.len());
+
+            let destination = std::slice::from_raw_parts_mut(buffer, len);
+            destination.copy_from_slice(&src[..len]);
+
+            // Ensure there's always a null terminator (in case we truncated)
+            if let Some(last) = destination.last_mut() {
+                *last = 0x00;
             }
 
-            *(buffer.offset(0)) = b'd';
-            *(buffer.offset(1)) = b'r';
-            *(buffer.offset(2)) = b'e';
-            *(buffer.offset(3)) = b'a';
-            *(buffer.offset(4)) = b'm';
-            *(buffer.offset(5)) = b's';
-            *(buffer.offset(6)) = b'e';
-            *(buffer.offset(7)) = b'e';
-            *(buffer.offset(8)) = b'k';
-            *(buffer.offset(9)) = b'e';
-            *(buffer.offset(10)) = b'r';
-            *(buffer.offset(11)) = b'.';
-            *(buffer.offset(12)) = b'e';
-            *(buffer.offset(13)) = b'x';
-            *(buffer.offset(14)) = b'e';
-            *(buffer.offset(15)) = b'\0';
-
-            return 15;
+            // TODO: This isn't a correct implementation of GetModuleFileNameW.
+            return len - 1;
         }
 
         (GET_ORIGINAL.unwrap())(handle, buffer, buffer_len)
